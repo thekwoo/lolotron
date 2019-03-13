@@ -1,11 +1,17 @@
 import asyncio
+from collections import namedtuple
 import discord
+import discord.ext.commands as dxc
 import json
 import sys
 
-TOKEN = ''
+# We need to create the client early so that we can override a lot of the functions
+# internally. This version is the Bot version so we have access to command parsing
+client = dxc.Bot('%', description='')
 
-client = discord.Client()
+# For the RSVP systme we need to track events
+rsvpEntry = namedtuple('rsvpEntry', ['user'])
+rsvpTracker = {}
 
 @client.event
 async def on_connect():
@@ -25,16 +31,28 @@ async def on_ready():
         for chan in g.text_channels:
             print('--> {:s}'.format(chan.name))
 
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
+@client.command()
+async def rsvp(ctx, *, arg):
+    # Save off the poster's message
+    msgBody = arg
 
-    await message.channel.send('Message ID: {:d}. Returning what you said: {:s}'.format(message.id, message.content))
 
-@client.event
-async def on_reaction_add(reaction, user):
-    await reaction.message.channel.send('User {:s} added the following reaction {} to message id {:d}'.format(user.name, reaction.emoji, reaction.message.id))
+    msg = await ctx.channel.send('This is an example of me modifying the message.\n' + msgBody)
+
+    print('The message I just sent has ID {:d}'.format(msg.id))
+
+#@client.event
+#async def on_message(message):
+#    # Ignore anything from myself
+#    if message.author == client.user:
+#        return
+#
+#    #
+#    await message.channel.send('Message ID: {:d}. Returning what you said: {:s}'.format(message.id, message.content))
+#
+#@client.event
+#async def on_reaction_add(reaction, user):
+#    await reaction.message.channel.send('User {:s} added the following reaction {} to message id {:d}'.format(user.name, reaction.emoji, reaction.message.id))
 
 
 ###############################################################################
