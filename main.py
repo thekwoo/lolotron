@@ -4,13 +4,15 @@ import discord
 import discord.ext.commands as dxc
 import json
 import sys
+import time
 
 # We need to create the client early so that we can override a lot of the functions
 # internally. This version is the Bot version so we have access to command parsing
 client = dxc.Bot('%', description='')
 
 # For the RSVP systme we need to track events
-rsvpEntry = namedtuple('rsvpEntry', ['user'])
+rsvpEntry = namedtuple('rsvpEntry', ['user', 'timeStamp'])
+rsvpEvent = namedtuple('rsvpEvent', ['owner', 'message', 'rsvps', 'expire'])
 rsvpTracker = {}
 
 @client.event
@@ -36,10 +38,19 @@ async def rsvp(ctx, *, arg):
     # Save off the poster's message
     msgBody = arg
 
+    owner = ctx.author
+    print('The owner of this message is: {}'.format(owner))
 
     msg = await ctx.channel.send('This is an example of me modifying the message.\n' + msgBody)
 
+    firstEntry = rsvpEntry(owner, time.time())
+    rsvpList = [firstEntry]
+
     print('The message I just sent has ID {:d}'.format(msg.id))
+
+    event = rsvpEvent(owner, msgBody, rsvpList, None)
+    rsvpTracker[msg.id] = event
+
 
 #@client.event
 #async def on_message(message):
@@ -50,10 +61,33 @@ async def rsvp(ctx, *, arg):
 #    #
 #    await message.channel.send('Message ID: {:d}. Returning what you said: {:s}'.format(message.id, message.content))
 #
-#@client.event
-#async def on_reaction_add(reaction, user):
-#    await reaction.message.channel.send('User {:s} added the following reaction {} to message id {:d}'.format(user.name, reaction.emoji, reaction.message.id))
 
+@client.event
+async def on_reaction_add(reaction, user):
+    # Grab the message ID to see if we should even try to parse stuff
+    msgId = reaction.message.id
+
+    # Skip modifying anything if we aren't tracking on this message
+    if msgId not in rsvpTracker:
+        print('could not find {:d} in the tracker so ignoring this'.format(msgId))
+        return
+    else:
+        event = rsvpTracker[msgId]
+
+    # Grab information about the event
+    reactEmjoi = reaction.emoji
+
+    # Check if the user is already in the list, this should really just be an edge case for the owner
+    for r in event.rsvps:
+        if r.user == user:
+            return
+
+    # Add RSVP to the list
+    newEntry = rsvpEntry(user, time.time())
+    event.rsvps.append(newEntry)
+
+    print('New event list:')
+    print(event.rsvps)
 
 ###############################################################################
 # Load General Settings
