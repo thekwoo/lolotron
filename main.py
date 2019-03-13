@@ -1,5 +1,7 @@
 import asyncio
 import discord
+import json
+import sys
 
 TOKEN = ''
 
@@ -34,6 +36,22 @@ async def on_message(message):
 async def on_reaction_add(reaction, user):
     await reaction.message.channel.send('User {:s} added the following reaction {} to message id {:d}'.format(user.name, reaction.emoji, reaction.message.id))
 
+
+###############################################################################
+# Load General Settings
+# We shouldn't store the token in source, and this also provides a way to store
+# other bot-wide settings.
+###############################################################################
+with open('lolotron_config.json', 'r') as f:
+    rawSettings = f.read()
+    genSettings = json.loads(rawSettings)
+
+token = genSettings['token']
+
+###############################################################################
+# Time to start everything. We never return from here, so make sure everything
+# is setup above this line
+###############################################################################
 print('Starting to run')
-client.run(TOKEN)
+client.run(token)
 print('Should be done')
