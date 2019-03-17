@@ -82,10 +82,7 @@ async def on_ready():
 async def rsvp(ctx, *, arg):
     # Save off the poster's message
     msgBody = arg
-
     owner = ctx.author
-    print('The owner of this message is: {}'.format(owner))
-
 
     # We need to create a message and send it to get a messageID, since we use the messageID as the identifier
     # We will edit the actual content later
@@ -93,32 +90,31 @@ async def rsvp(ctx, *, arg):
     print('The message I just sent has ID {:d}'.format(msg.id))
 
     # Finish setting up the RSVP Event Object
-    firstEntry = rsvpEntry(owner, time.time(), True)
-    rsvpList = [firstEntry]
-    event = rsvpEvent(owner, msgBody, rsvpList, 0.0, msg.id)
+    firstEntry          = rsvpEntry(owner, time.time(), True)
+    event               = rsvpEvent(owner, msgBody, [firstEntry], 0.0, msg.id)
     rsvpTracker[msg.id] = event
 
     # Update the RSVP Message from the bot
     msgTxt = rsvpMsgGenerator(event)
     await msg.edit(content=msgTxt)
 
+    # For convenience, add the reaction to the post so people don't have to dig it up
+    await msg.add_reaction(rsvpEmoji)
+
     # Delete the original message now that we're done parsing it
     await ctx.message.delete()
 
-#@client.event
-#async def on_message(message):
-#    # Ignore anything from myself
-#    if message.author == client.user:
-#        return
-#
-#    #
-#    await message.channel.send('Message ID: {:d}. Returning what you said: {:s}'.format(message.id, message.content))
-#
-
+'''
+Adds the user to the list of RSVPs
+'''
 @client.event
 async def on_reaction_add(reaction, user):
     # Grab the message ID to see if we should even try to parse stuff
     msgId = reaction.message.id
+
+    # Ignore ourselves
+    if user == client.user:
+        return
 
     # Skip modifying anything if we aren't tracking on this message
     if msgId not in rsvpTracker:
@@ -134,12 +130,61 @@ async def on_reaction_add(reaction, user):
 
     # Check if the user is already in the list, this should really just be an edge case for the owner
     for r in event.rsvps:
-        if r.user == user:
+        if (r.user == user) and (r.valid):
             return
 
     # Add RSVP to the list
     newEntry = rsvpEntry(user, time.time(), True)
     event.rsvps.append(newEntry)
+
+    msgTxt = rsvpMsgGenerator(event)
+    await reaction.message.edit(content=msgTxt)
+
+'''
+Removes the user from the list of RSVPs
+'''
+@client.event
+async def on_raw_reaction_remove(payload):
+#async def on_reaction_remove(reaction, user):
+    # We need to go dig through everything to find the message T_T
+    # We thankfully can skip looking up the guild and just find the channel ID, which will
+    # also cover the cases of private messages
+    channel = client.get_channel(payload.channel_id)
+    message = await channel.get_message(payload.message_id)
+    user    = client.get_user(payload.user_id)
+    emoji   = payload.emoji
+
+    print('In raw reaction remove')
+
+    # Grab the message ID to see if we should even try to parse stuff
+    msgId = message.id
+
+    # Skip modifying anything if we aren't tracking on this message
+    if msgId not in rsvpTracker:
+        print('could not find {:d} in the tracker so ignoring this'.format(msgId))
+        return
+    else:
+        event = rsvpTracker[msgId]
+
+    # Check that this is the correct
+    if rsvpEmoji != emoji.name:
+        print('reacted emjoi doesnt match expected. got {}'.format(emoji))
+        return
+
+    # Look for the user in the list
+    for r in event.rsvps:
+        if (r.user == user) and (r.valid):
+            rsvp = r
+            break
+    else:
+        # Something goofy happened...so we'll just pretend it never happened
+        return
+
+    # For auditing's sake, we don't delete entries, only invalidate them
+    rsvp.valid = False
+
+    #Debug
+    print(event.rsvps)
 
     msgTxt = rsvpMsgGenerator(event)
     await reaction.message.edit(content=msgTxt)
