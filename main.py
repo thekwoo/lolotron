@@ -1,5 +1,7 @@
 import asyncio
 from collections import namedtuple
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 import discord
 import discord.ext.commands as dxc
 import json
@@ -11,9 +13,21 @@ from typing import Any,Dict,List,Tuple
 # internally. This version is the Bot version so we have access to command parsing
 client = dxc.Bot('%', description='')
 
-# For the RSVP systme we need to track events
-rsvpEntry = namedtuple('rsvpEntry', ['user', 'timeStamp', 'valid'])
-rsvpEvent = namedtuple('rsvpEvent', ['owner', 'message', 'rsvps', 'expire', 'id'])
+# For the RSVP system we need to track events
+@dataclass
+class rsvpEntry:
+    user: discord.user
+    timeStamp: datetime
+    valid: bool
+
+@dataclass
+class rsvpEvent:
+    owner: discord.user
+    message: str
+    rsvps: List[rsvpEntry]
+    expire: datetime
+    trackId: int
+
 rsvpTracker = {}
 
 rsvpEmoji = '\U0001F64B'
@@ -55,10 +69,11 @@ def rsvpMsgGenerator(event:rsvpEvent) -> str:
 
     # Append the footer information
     # TODO: The expiration time should be something better than the float, we should format it
-    msg += rsvpTemplateMessageFoot.format(event.id, event.expire)
+    msg += rsvpTemplateMessageFoot.format(event.trackId, event.expire)
 
     return msg
 
+rsvpExpireTimeIncr = timedelta(days=1, hours=12)
 
 @client.event
 async def on_connect():
@@ -90,8 +105,11 @@ async def rsvp(ctx, *, arg):
     print('The message I just sent has ID {:d}'.format(msg.id))
 
     # Finish setting up the RSVP Event Object
-    firstEntry          = rsvpEntry(owner, time.time(), True)
-    event               = rsvpEvent(owner, msgBody, [firstEntry], 0.0, msg.id)
+    timeNow    = datetime.utcnow()
+    timeExpire = timeNow + rsvpExpireTimeIncr
+
+    firstEntry          = rsvpEntry(owner, timeNow, True)
+    event               = rsvpEvent(owner, msgBody, [firstEntry], timeExpire, msg.id)
     rsvpTracker[msg.id] = event
 
     # Update the RSVP Message from the bot
@@ -134,7 +152,7 @@ async def on_reaction_add(reaction, user):
             return
 
     # Add RSVP to the list
-    newEntry = rsvpEntry(user, time.time(), True)
+    newEntry = rsvpEntry(user, datetime.utcnow(), True)
     event.rsvps.append(newEntry)
 
     msgTxt = rsvpMsgGenerator(event)
@@ -153,8 +171,6 @@ async def on_raw_reaction_remove(payload):
     message = await channel.get_message(payload.message_id)
     user    = client.get_user(payload.user_id)
     emoji   = payload.emoji
-
-    print('In raw reaction remove')
 
     # Grab the message ID to see if we should even try to parse stuff
     msgId = message.id
@@ -178,16 +194,14 @@ async def on_raw_reaction_remove(payload):
             break
     else:
         # Something goofy happened...so we'll just pretend it never happened
+        print('reaction_remove sub-routine failed to find the user who un-reacted.')
         return
 
     # For auditing's sake, we don't delete entries, only invalidate them
     rsvp.valid = False
 
-    #Debug
-    print(event.rsvps)
-
     msgTxt = rsvpMsgGenerator(event)
-    await reaction.message.edit(content=msgTxt)
+    await message.edit(content=msgTxt)
 
 ###############################################################################
 # Load General Settings
