@@ -53,7 +53,7 @@ Expiration Time: {}
 '''
 
 '''
-Helper function that generates the message
+Helper function that generates the RSVP message
 '''
 def rsvpMsgGenerator(event:rsvpEvent) -> str:
     # Create the header
@@ -73,12 +73,34 @@ def rsvpMsgGenerator(event:rsvpEvent) -> str:
 
     return msg
 
-rsvpExpireTimeIncr = timedelta(days=1, hours=12)
+#rsvpExpireTimeIncr = timedelta(days=1, hours=12)
+rsvpExpireTimeIncr = timedelta(seconds=30)
 
+'''
+Garbage collector that should be called whenver an event occurs. Will purge the
+event list of events that have expired
+
+I can't figure out a better way than for all functions to call this periodically,
+so we'll just treat this as a lazy garbage collector.
+'''
+def rsvpCleanup():
+    expiredList = []
+    for k,v in rsvpTracker.items():
+        if v.expire <= datetime.utcnow():
+            print('Found an expired event with id {}'.format(k))
+            expiredList.append(k)
+
+    for k in expiredList:
+        rsvpTracker.pop(k)
+
+# TODO: Do we even need this
 @client.event
 async def on_connect():
     print('Connected')
 
+'''
+Initial setup to know that things have worked
+'''
 @client.event
 async def on_ready():
     print('*' * 80)
@@ -95,6 +117,9 @@ async def on_ready():
 
 @client.command()
 async def rsvp(ctx, *, arg):
+    # Run cleanup
+    rsvpCleanup()
+
     # Save off the poster's message
     msgBody = arg
     owner = ctx.author
@@ -127,6 +152,9 @@ Adds the user to the list of RSVPs
 '''
 @client.event
 async def on_reaction_add(reaction, user):
+    # Run cleanup
+    rsvpCleanup()
+
     # Grab the message ID to see if we should even try to parse stuff
     msgId = reaction.message.id
 
@@ -163,7 +191,9 @@ Removes the user from the list of RSVPs
 '''
 @client.event
 async def on_raw_reaction_remove(payload):
-#async def on_reaction_remove(reaction, user):
+    # Run cleanup
+    rsvpCleanup()
+
     # We need to go dig through everything to find the message T_T
     # We thankfully can skip looking up the guild and just find the channel ID, which will
     # also cover the cases of private messages
