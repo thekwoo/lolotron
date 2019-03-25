@@ -24,7 +24,7 @@ class rsvp(commands.Cog):
 
     templateMessageFoot = \
     '''
-    Additional Options:
+    ---------------------------------------------
     SystemID: {}
     Expiration Time: {}
     '''
@@ -48,7 +48,7 @@ class rsvp(commands.Cog):
         # Also keep a counter for enumeration, but start with 1 index for non-programmers
         cnt = 1
         for e in event.entries:
-            if e.valid:
+            if (e.valid) and (e.react == self.rsvpEmoji):
                 msg += '{} - {}\n'.format(cnt, e.user.display_name)
 
 
@@ -124,14 +124,9 @@ class rsvp(commands.Cog):
         else:
             event = self.rsvps[msgId]
 
-        # Check that this is the correct
-        if self.rsvpEmoji != reaction.emoji:
-            print('reacted emjoi doesnt match expected. got {}'.format(reaction.emoji))
-            return
-
         # Check if the user is already in the list, this should really just be an edge case for the owner
         for r in event.entries:
-            if (r.user == user) and (r.valid):
+            if (r.user == user) and (r.react == reaction.emoji) and (r.valid):
                 return
 
         # Add RSVP to the list
@@ -140,6 +135,10 @@ class rsvp(commands.Cog):
 
         msgTxt = self.msgGenerator(event)
         await reaction.message.edit(content=msgTxt)
+
+
+        #debug
+        print(event)
 
     '''
     Removes the user from the list of RSVPs
@@ -167,14 +166,10 @@ class rsvp(commands.Cog):
         else:
             event = self.rsvps[msgId]
 
-        # Check that this is the correct
-        if self.rsvpEmoji != emoji.name:
-            print('reacted emjoi doesnt match expected. got {}'.format(emoji))
-            return
-
-        # Look for the user in the list
+        # Look for the user in the list. Since we are tracking all reacts, we need to
+        # compare that it's the same user, emoji, and is the currently active one
         for e in event.entries:
-            if (e.user == user) and (e.valid):
+            if (e.user == user) and (e.react == emoji) and (e.valid):
                 rsvp = e
                 break
         else:
@@ -184,6 +179,9 @@ class rsvp(commands.Cog):
 
         # For auditing's sake, we don't delete entries, only invalidate them
         rsvp.valid = False
+
+        # Debug
+        print(event)
 
         msgTxt = self.msgGenerator(event)
         await message.edit(content=msgTxt)
