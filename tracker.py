@@ -28,7 +28,7 @@ representation to make comparisons easier
 @dataclass
 class trackerEntry:
     user:       discord.user
-    react:      str
+    react:      discord.Emoji or str
     timeStamp:  datetime
     valid:      bool
 
@@ -58,7 +58,7 @@ def gc(cList: Dict[int, Tracker]) -> Dict[int, Tracker]:
 
     # Find all the tracking items that are expired
     for k,v in cList.items():
-        if v.expire <= ctime:
+        if v.expire <= cTime:
             print('Found an expired event with id {}'.format(k))
             expiredList.append(k)
 
