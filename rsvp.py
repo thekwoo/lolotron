@@ -84,23 +84,69 @@ class rsvp(commands.Cog):
         timeExpire = timeNow + self.expireTimeIncr
 
         firstEntry          = tracker.trackerEntry(owner, self.rsvpEmoji, timeNow, True)
-        event               = tracker.Tracker(owner, msgBody, [firstEntry], timeExpire,
+        event               = tracker.Tracker(owner, msgBody, msg, [firstEntry], timeExpire,
                                               tracker.trackerType.rsvp, msg.id)
         self.rsvps[msg.id] = event
 
         # Update the RSVP Message from the bot
         msgTxt = self.msgGenerator(event)
-        await msg.edit(content=msgTxt)
+        await event.msgObj.edit(content=msgTxt)
 
         # For convenience, add the reaction to the post so people don't have to dig it up
-        await msg.add_reaction(self.rsvpEmoji)
+        await event.msgObj.add_reaction(self.rsvpEmoji)
 
         # Delete the original message now that we're done parsing it
         await ctx.message.delete()
 
     @rsvp.command()
     async def edit(self, ctx, *, arg):
-        print('I am in edit')
+        # Run cleanup
+        self.rsvps = tracker.gc(self.rsvps)
+
+        # Ignore ourselves
+        if ctx.author == self.bot.user:
+            return
+
+        # Split the arguments, the first should be the message ID and the second is the string
+        # that will become the message
+        splitArg = arg.split('\n', 1)
+
+        print(splitArg)
+        # If we only got 1 thing, it might be all on the same line, so now break it up by spaces
+        if len(splitArg) == 1:
+            splitArg = splitArg[0].split(' ', 1)
+
+        if len(splitArg) > 0:
+            msgId = int(splitArg[0])
+        else:
+            print('RSVP Edit did not get a message ID, so we cant do anything. Skipping...')
+            return
+
+        if len(splitArg) > 1:
+            msg = splitArg[1]
+        else:
+            msg = None
+
+        # Skip modifying anything if we aren't tracking on this message
+        if msgId not in self.rsvps:
+            print('could not find {:d} in the tracker so ignoring this'.format(msgId))
+            return
+        else:
+            event = self.rsvps[msgId]
+
+        # Only the owner is allowed to edit
+        if ctx.author != event.owner:
+            print('the called {} is not the owner {}'.format(ctx.author.display_name, event.owner.display_name))
+            return
+
+        # Update message
+        event.message = msg
+        msgTxt = self.msgGenerator(event)
+        print('updated message: {}'.format(msgTxt))
+        await event.msgObj.edit(content=msgTxt)
+
+        # Delete the modifying message
+        await ctx.message.delete()
 
     '''
     Adds the user to the list of RSVPs
@@ -134,8 +180,7 @@ class rsvp(commands.Cog):
         event.entries.append(newEntry)
 
         msgTxt = self.msgGenerator(event)
-        await reaction.message.edit(content=msgTxt)
-
+        await event.msgObj.edit(content=msgTxt)
 
         #debug
         print(event)
@@ -184,4 +229,4 @@ class rsvp(commands.Cog):
         print(event)
 
         msgTxt = self.msgGenerator(event)
-        await message.edit(content=msgTxt)
+        await rsvp.msgObj.edit(content=msgTxt)

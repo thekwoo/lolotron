@@ -40,6 +40,7 @@ reactions to it via the above trackerEntry objects.
 class Tracker:
     owner:      discord.user
     message:    str
+    msgObj:     discord.Message
     entries:    List[trackerEntry]
     expire:     datetime
     trackType:  trackerType
