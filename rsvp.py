@@ -29,8 +29,7 @@ class rsvp(commands.Cog):
     Expiration Time: {}
     '''
 
-    #expireTimeIncr = timedelta(days=1, hours=12)
-    expireTimeIncr = timedelta(seconds=30)
+    expireTimeIncr = timedelta(days=1, hours=12)
 
     def __init__(self, bot):
         self.bot = bot
@@ -111,7 +110,6 @@ class rsvp(commands.Cog):
         # that will become the message
         splitArg = arg.split('\n', 1)
 
-        print(splitArg)
         # If we only got 1 thing, it might be all on the same line, so now break it up by spaces
         if len(splitArg) == 1:
             splitArg = splitArg[0].split(' ', 1)
@@ -144,6 +142,40 @@ class rsvp(commands.Cog):
         msgTxt = self.msgGenerator(event)
         print('updated message: {}'.format(msgTxt))
         await event.msgObj.edit(content=msgTxt)
+
+        # Delete the modifying message
+        await ctx.message.delete()
+
+    @rsvp.command()
+    async def delete(self, ctx, arg):
+        # Ignore ourselves
+        if ctx.author == self.bot.user:
+            return
+
+        try:
+            msgId = int(arg)
+        except:
+            print('Failed to convert rsvp delete argument to delete. Got {}'.format(arg))
+            return
+
+        # Skip modifying anything if we aren't tracking this message
+        if msgId not in self.rsvps:
+            print('Could not find {:d} in the tracker so ignoring this'.format(msgId))
+            return
+        else:
+            event = self.rsvps[msgId]
+
+        # Only the owner is allowed to delete
+        if ctx.author != event.owner:
+            print('Delete called by {} but is not the owner {}'.format(ctx.author.display_name, event.owner.display_name))
+            return
+
+        # Delete the message
+        await event.msgObj.delete()
+        self.rsvps.pop(msgId)
+
+        # Debug
+        print(self.rsvps)
 
         # Delete the modifying message
         await ctx.message.delete()
