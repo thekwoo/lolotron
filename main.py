@@ -11,6 +11,7 @@ import time
 from typing import Any,Dict,List,Tuple
 
 # Internal Libraries
+import tracker
 import rsvp
 
 # We need to create the client early so that we can override a lot of the functions
@@ -52,6 +53,7 @@ token = genSettings['token']
 ###############################################################################
 
 print('Loading modules')
+client.add_cog(tracker.reactTracker(client))
 client.add_cog(rsvp.rsvp(client))
 print('Starting to run')
 client.run(token)

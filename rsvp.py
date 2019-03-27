@@ -35,11 +35,12 @@ class rsvp(commands.Cog):
         self.bot = bot
 
         self.rsvps = {}
+        self.tracker = self.bot.get_cog('reactTracker')
 
     '''
     Helper function that generates the RSVP message
     '''
-    def msgGenerator(self, event:tracker.Tracker) -> str:
+    async def msgGenerator(self, event:tracker.Tracker):
         # Create the header
         msg = textwrap.dedent(self.templateMessageBody.format(event.owner.display_name, event.message))
 
@@ -50,11 +51,10 @@ class rsvp(commands.Cog):
             if (e.valid) and (e.react == self.rsvpEmoji):
                 msg += '{} - {}\n'.format(cnt, e.user.display_name)
 
-
         # Append the footer information
-        msg += textwrap.dedent(self.templateMessageFoot.format(event.trackId, event.expire))
+        msg += textwrap.dedent(self.templateMessageFoot.format(event.msgObj.id, event.expire))
 
-        return msg
+        await event.msgObj.edit(content = msg)
 
     '''
     Just a group container that acts as a wrapper as well
@@ -65,43 +65,30 @@ class rsvp(commands.Cog):
             print('Should do some help here?')
 
     @rsvp.command()
-    async def add(self, ctx, *, arg):
-        # Run cleanup
-        self.rsvps = tracker.gc(self.rsvps)
-
-        # Save off the poster's message
-        msgBody = arg
+    async def add(self, ctx, *, msgBody):
+        # Get the owner from the context
         owner = ctx.author
 
         # We need to create a message and send it to get a messageID, since we use the messageID as the identifier
         # We will edit the actual content later
         msg = await ctx.channel.send('Preparing an RSVP message...')
-        print('The message I just sent has ID {:d}'.format(msg.id))
 
         # Finish setting up the RSVP Event Object
-        timeNow    = datetime.utcnow()
-        timeExpire = timeNow + self.expireTimeIncr
-
-        firstEntry          = tracker.trackerEntry(owner, self.rsvpEmoji, timeNow, True)
-        event               = tracker.Tracker(owner, msgBody, msg, [firstEntry], timeExpire,
-                                              tracker.trackerType.rsvp, msg.id)
-        self.rsvps[msg.id] = event
+        t = self.tracker.createTrackedItem(msg, owner, msg=msgBody, callback=self.msgGenerator)
+        firstEntry = tracker.trackerEntry(owner, self.rsvpEmoji, datetime.utcnow(), True)
+        t.entries.append(firstEntry)
 
         # Update the RSVP Message from the bot
-        msgTxt = self.msgGenerator(event)
-        await event.msgObj.edit(content=msgTxt)
+        await self.msgGenerator(t)
 
         # For convenience, add the reaction to the post so people don't have to dig it up
-        await event.msgObj.add_reaction(self.rsvpEmoji)
+        await t.msgObj.add_reaction(self.rsvpEmoji)
 
         # Delete the original message now that we're done parsing it
         await ctx.message.delete()
 
     @rsvp.command()
     async def edit(self, ctx, *, arg):
-        # Run cleanup
-        self.rsvps = tracker.gc(self.rsvps)
-
         # Ignore ourselves
         if ctx.author == self.bot.user:
             return
@@ -126,29 +113,26 @@ class rsvp(commands.Cog):
             msg = None
 
         # Skip modifying anything if we aren't tracking on this message
-        if msgId not in self.rsvps:
+        event = self.tracker.getTrackedItem(msgId)
+        if msgId is None:
             print('could not find {:d} in the tracker so ignoring this'.format(msgId))
             return
-        else:
-            event = self.rsvps[msgId]
 
-        # Only the owner is allowed to edit
+        ## Only the owner is allowed to edit
         if ctx.author != event.owner:
             print('the called {} is not the owner {}'.format(ctx.author.display_name, event.owner.display_name))
             return
 
-        # Update message
+        ## Update message
         event.message = msg
-        msgTxt = self.msgGenerator(event)
-        print('updated message: {}'.format(msgTxt))
-        await event.msgObj.edit(content=msgTxt)
+        await self.msgGenerator(event)
 
-        # Delete the modifying message
+        ## Delete the modifying message
         await ctx.message.delete()
 
     @rsvp.command()
     async def delete(self, ctx, arg):
-        # Ignore ourselves
+        ## Ignore ourselves
         if ctx.author == self.bot.user:
             return
 
@@ -158,107 +142,27 @@ class rsvp(commands.Cog):
             print('Failed to convert rsvp delete argument to delete. Got {}'.format(arg))
             return
 
-        # Skip modifying anything if we aren't tracking this message
-        if msgId not in self.rsvps:
+        ## Skip modifying anything if we aren't tracking this message
+        event = self.tracker.getTrackedItem(msgId)
+        if msgId is None:
             print('Could not find {:d} in the tracker so ignoring this'.format(msgId))
             return
-        else:
-            event = self.rsvps[msgId]
 
-        # Only the owner is allowed to delete
+        ## Only the owner is allowed to delete
         if ctx.author != event.owner:
             print('Delete called by {} but is not the owner {}'.format(ctx.author.display_name, event.owner.display_name))
             return
 
-        # Delete the message
+        ## Delete the message
         await event.msgObj.delete()
-        self.rsvps.pop(msgId)
+        self.tracker.deleteTrackedItem(msgId)
 
-        # Debug
+        ## Debug
         print(self.rsvps)
 
-        # Delete the modifying message
+        ## Delete the modifying message
         await ctx.message.delete()
 
-    '''
-    Adds the user to the list of RSVPs
-    '''
-    @commands.Cog.listener()
-    async def on_reaction_add(self, reaction, user):
-        # Run cleanup
-        self.rsvps = tracker.gc(self.rsvps)
-
-        # Ignore ourselves
-        if user == self.bot.user:
-            return
-
-        # Grab the message ID to see if we should even try to parse stuff
-        msgId = reaction.message.id
-
-        # Skip modifying anything if we aren't tracking on this message
-        if msgId not in self.rsvps:
-            print('could not find {:d} in the tracker so ignoring this'.format(msgId))
-            return
-        else:
-            event = self.rsvps[msgId]
-
-        # Check if the user is already in the list, this should really just be an edge case for the owner
-        for r in event.entries:
-            if (r.user == user) and (r.react == reaction.emoji) and (r.valid):
-                return
-
-        # Add RSVP to the list
-        newEntry = tracker.trackerEntry(user, reaction.emoji, datetime.utcnow(), True)
-        event.entries.append(newEntry)
-
-        msgTxt = self.msgGenerator(event)
-        await event.msgObj.edit(content=msgTxt)
-
-        #debug
-        print(event)
-
-    '''
-    Removes the user from the list of RSVPs
-    '''
-    @commands.Cog.listener()
-    async def on_raw_reaction_remove(self, payload):
-        # Run cleanup
-        self.rsvps = tracker.gc(self.rsvps)
-
-        # We need to go dig through everything to find the message T_T
-        # We thankfully can skip looking up the guild and just find the channel ID, which will
-        # also cover the cases of private messages
-        channel = self.bot.get_channel(payload.channel_id)
-        message = await channel.get_message(payload.message_id)
-        user    = self.bot.get_user(payload.user_id)
-        emoji   = payload.emoji
-
-        # Grab the message ID to see if we should even try to parse stuff
-        msgId = message.id
-
-        # Skip modifying anything if we aren't tracking on this message
-        if msgId not in self.rsvps:
-            print('could not find {:d} in the tracker so ignoring this'.format(msgId))
-            return
-        else:
-            event = self.rsvps[msgId]
-
-        # Look for the user in the list. Since we are tracking all reacts, we need to
-        # compare that it's the same user, emoji, and is the currently active one
-        for e in event.entries:
-            if (e.user == user) and (e.react == emoji) and (e.valid):
-                rsvp = e
-                break
-        else:
-            # Something goofy happened...so we'll just pretend it never happened
-            print('reaction_remove sub-routine failed to find the user who un-reacted.')
-            return
-
-        # For auditing's sake, we don't delete entries, only invalidate them
-        rsvp.valid = False
-
-        # Debug
-        print(event)
-
-        msgTxt = self.msgGenerator(event)
-        await rsvp.msgObj.edit(content=msgTxt)
+    @rsvp.command()
+    async def extend(self, ctx, arg):
+        pass
