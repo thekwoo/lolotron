@@ -29,9 +29,14 @@ class trackerEntry:
         rtnData['user'] = data.user.id
 
         if isinstance(data.react, str):
+            rtnData['reactType'] = 'unicode'
             rtnData['react'] = data.react
+        elif data.react.id is None:
+            rtnData['reactType'] = 'unicode'
+            rtnData['react'] = data.react.name
         else:
-            rtnData['react'] = data.react.str
+            rtnData['reactType'] = 'emoji'
+            rtnData['react'] = data.react.id
 
         rtnData['timeStamp'] = data.timeStamp.timestamp()
         rtnData['valid']     = data.valid
@@ -41,7 +46,16 @@ class trackerEntry:
     @classmethod
     def decode(cls, client:commands.Bot, data:Dict[str, Any]):
         user  = client.get_user(data['user'])
-        react = data['react']
+
+        if data['reactType'] == 'unicode':
+            react = data['react']
+        elif data['reactType'] == 'emoji':
+            react = client.get_emoji(data['react'])
+            if react is None:
+                print('Couldnt find emoji with ID {}'.data['react'])
+        else:
+            react = None
+
         timeStamp = datetime.fromtimestamp(data['timeStamp'])
         valid = data['valid']
 
@@ -237,12 +251,34 @@ class reactTracker(commands.Cog):
         for k in expiredList:
             self.trackedItems.pop(k)
 
+    '''
+    Helper function to compare emojis. Since emojis may be represented as a unicode string,
+    a custom emoji (with and ID) or an included emoji (possbily without and id) this function
+    tries to figure out what is there and compare accordingly.
+
+    The a parameter should always be a PartialEmoji, but b parameter can be anything emoji like
+    '''
+    def emojiCompare(self, a:discord.PartialEmoji, b) -> bool:
+        if isinstance(b, str):
+            return a.name == b
+        elif (a.id is not None) and (b.id is not None):
+            return a.id == b.id
+        else:
+            a.name == b.name
 
     '''
     Adds the user to the list of tracked events
     '''
     @commands.Cog.listener()
-    async def on_reaction_add(self, reaction, user):
+    async def on_raw_reaction_add(self, payload):
+        # We need to go dig through everything to find the message T_T
+        # We thankfully can skip looking up the guild and just find the channel ID, which will
+        # also cover the cases of private messages
+        channel = self.bot.get_channel(payload.channel_id)
+        message = await channel.fetch_message(payload.message_id)
+        user    = self.bot.get_user(payload.user_id)
+        emoji   = payload.emoji
+
         # Ignore ourselves
         if user == self.bot.user:
             return
@@ -251,7 +287,7 @@ class reactTracker(commands.Cog):
         await self.gc()
 
         # Grab the message ID to see if we should even try to parse stuff
-        msgId = reaction.message.id
+        msgId = message.id
 
         # Skip modifying anything if we aren't tracking on this message
         if msgId not in self.trackedItems:
@@ -262,12 +298,12 @@ class reactTracker(commands.Cog):
 
         # Check if the user is already in the list, this should really just be an edge case for the owner
         for e in event.entries:
-            if (e.user == user) and (e.react == reaction.emoji) and (e.valid):
+            if (e.user == user) and (e.react == emoji) and (e.valid):
                 print('exiting earlier')
                 return
 
         # Add RSVP to the list
-        newEntry = trackerEntry(user, reaction.emoji, datetime.utcnow(), True)
+        newEntry = trackerEntry(user, emoji, datetime.utcnow(), True)
         event.entries.append(newEntry)
 
         #debug
@@ -306,7 +342,7 @@ class reactTracker(commands.Cog):
         # Look for the user in the list. Since we are tracking all reacts, we need to
         # compare that it's the same user, emoji, and is the currently active one
         for e in event.entries:
-            if (e.user == user) and (e.react == emoji) and (e.valid):
+            if (e.user == user) and (e.valid) and self.emojiCompare(emoji, e.react):
                 rsvp = e
                 break
         else:
