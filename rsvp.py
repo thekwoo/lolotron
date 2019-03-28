@@ -37,6 +37,8 @@ class rsvp(commands.Cog):
         self.rsvps = {}
         self.tracker = self.bot.get_cog('reactTracker')
 
+        self.tracker.registerCallbacks(type(self).__name__, self.msgGenerator)
+
     '''
     Helper function that generates the RSVP message
     '''
@@ -74,7 +76,7 @@ class rsvp(commands.Cog):
         msg = await ctx.channel.send('Preparing an RSVP message...')
 
         # Finish setting up the RSVP Event Object
-        t = self.tracker.createTrackedItem(msg, owner, msg=msgBody, callback=self.msgGenerator)
+        t = self.tracker.createTrackedItem(msg, owner, msg=msgBody, callback=type(self).__name__)
         firstEntry = tracker.trackerEntry(owner, self.rsvpEmoji, datetime.utcnow(), True)
         t.entries.append(firstEntry)
 
@@ -113,10 +115,12 @@ class rsvp(commands.Cog):
             msg = None
 
         # Skip modifying anything if we aren't tracking on this message
-        event = self.tracker.getTrackedItem(msgId)
         if msgId is None:
             print('could not find {:d} in the tracker so ignoring this'.format(msgId))
             return
+        else:
+            event = self.tracker.getTrackedItem(msgId)
+            print(event)
 
         ## Only the owner is allowed to edit
         if ctx.author != event.owner:
@@ -143,10 +147,11 @@ class rsvp(commands.Cog):
             return
 
         ## Skip modifying anything if we aren't tracking this message
-        event = self.tracker.getTrackedItem(msgId)
         if msgId is None:
             print('Could not find {:d} in the tracker so ignoring this'.format(msgId))
             return
+        else:
+            event = self.tracker.getTrackedItem(msgId)
 
         ## Only the owner is allowed to delete
         if ctx.author != event.owner:

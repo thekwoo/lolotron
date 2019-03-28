@@ -4,6 +4,7 @@ from datetime import datetime,timedelta
 import discord
 from discord.ext import commands
 from enum import Enum, auto
+import json
 from typing import Any,Dict,List,Tuple
 
 '''
@@ -20,6 +21,31 @@ class trackerEntry:
     react:      discord.Emoji or str
     timeStamp:  datetime
     valid:      bool
+
+    @staticmethod
+    def encode(data) -> Dict[str, Any]:
+        rtnData = {}
+
+        rtnData['user'] = data.user.id
+
+        if isinstance(data.react, str):
+            rtnData['react'] = data.react
+        else:
+            rtnData['react'] = data.react.str
+
+        rtnData['timeStamp'] = data.timeStamp.timestamp()
+        rtnData['valid']     = data.valid
+
+        return rtnData
+
+    @classmethod
+    def decode(cls, client:commands.Bot, data:Dict[str, Any]):
+        user  = client.get_user(data['user'])
+        react = data['react']
+        timeStamp = datetime.fromtimestamp(data['timeStamp'])
+        valid = data['valid']
+
+        return trackerEntry(user, react, timeStamp, valid)
 
 '''
 A tracked item. This is essentially the message the bot will create, and a list of
@@ -40,17 +66,82 @@ class Tracker:
     msgObj:      discord.Message
     entries:     List[trackerEntry]
     expire:      datetime
-    msgCallback: Any
+    msgCallback: str
+
+    @staticmethod
+    def encode(data) -> Dict[str, Any]:
+        rtnData = {}
+
+        rtnData['owner'] = data.owner.id
+        rtnData['msg']   = data.message
+        rtnData['msgId'] = data.msgObj.id
+
+        rtnData['entries'] = []
+        for e in data.entries:
+            rtnData['entries'].append(trackerEntry.encode(e))
+
+        rtnData['expire'] = data.expire.timestamp()
+        rtnData['callback'] = data.msgCallback
+
+        return rtnData
+
+    @classmethod
+    async def decode(cls, client:commands.Bot, data:Dict[str, Any]):
+        print('in decode')
+        owner = client.get_user(data['owner'])
+        print('owner: {}'.format(owner))
+        message = data['msg']
+        print('message: {}'.format(message))
+
+        for c in client.get_all_channels():
+            for tc in c.text_channels:
+                print(tc)
+                try:
+                    msgObj = await tc.fetch_message(data['msgId'])
+                except:
+                    continue
+                else:
+                    break
+            else:
+                continue
+
+            break
+        else:
+            msgObj = None
+        print("msgObj: {}".format(msgObj))
+
+        entries = []
+        for e in data['entries']:
+            entries.append(trackerEntry.decode(client, e))
+        print("entries: {}".format(entries))
+
+        expire = datetime.utcfromtimestamp(data['expire'])
+        print('expire: {}'.format(expire))
+        msgCallback = data['callback']
+
+        return Tracker(owner, message, msgObj, entries, expire, msgCallback)
+
 
 '''
 A Cog that tracks reactions to a message
 '''
 class reactTracker(commands.Cog):
+    jsonFileName = 'reactTracker.json'
     def __init__(self, bot):
         self.bot = bot
-        self.trackedItems = {}
 
+        self.trackedItems = {}
+        self.callbacks = {}
+
+        bot.loop.create_task(self.load_settings())
         bot.loop.create_task(self.gc_task())
+
+    '''
+    '''
+    def registerCallbacks(self, name, func):
+        self.callbacks[name] = func
+        print('Callback table is now:')
+        print(self.callbacks)
 
     '''
     Creates a tracked object
@@ -90,6 +181,33 @@ class reactTracker(commands.Cog):
             return
 
     '''
+    '''
+    async def load_settings(self):
+        await self.bot.wait_until_ready()
+
+        try:
+            with open(self.jsonFileName, 'r') as f:
+                jsonData = json.loads(f.read())
+
+            print("read the following data:")
+            print(jsonData)
+            print('===========================')
+
+            for k,v in jsonData.items():
+                print(k)
+                print(v)
+                t = await Tracker.decode(self.bot, v)
+                self.trackedItems[int(k)] = t
+
+        except Exception as e:
+            print('loading exception')
+            print(e)
+            pass
+
+        print(self.trackedItems)
+
+
+    '''
     A task that periodically runs the garbage collector
     '''
     async def gc_task(self):
@@ -112,7 +230,7 @@ class reactTracker(commands.Cog):
         # Find all the tracking items that are expired
         for k,v in self.trackedItems.items():
             if v.expire <= cTime:
-                print('Found an expired event with id {}'.format(k))
+                print('GC found an expired event with id {}'.format(k))
                 expiredList.append(k)
 
         # Remove all the expired events
@@ -145,6 +263,7 @@ class reactTracker(commands.Cog):
         # Check if the user is already in the list, this should really just be an edge case for the owner
         for e in event.entries:
             if (e.user == user) and (e.react == reaction.emoji) and (e.valid):
+                print('exiting earlier')
                 return
 
         # Add RSVP to the list
@@ -154,8 +273,9 @@ class reactTracker(commands.Cog):
         #debug
         print(event)
 
-        if event.msgCallback is not None:
-            await event.msgCallback(event)
+        if (event.msgCallback is not None) and (event.msgCallback in self.callbacks):
+            print('Modifying event')
+            await self.callbacks[event.msgCallback](event)
 
     '''
     Removes the user from the list of tracked events
@@ -166,7 +286,7 @@ class reactTracker(commands.Cog):
         # We thankfully can skip looking up the guild and just find the channel ID, which will
         # also cover the cases of private messages
         channel = self.bot.get_channel(payload.channel_id)
-        message = await channel.get_message(payload.message_id)
+        message = await channel.fetch_message(payload.message_id)
         user    = self.bot.get_user(payload.user_id)
         emoji   = payload.emoji
 
@@ -201,5 +321,20 @@ class reactTracker(commands.Cog):
         print(event)
 
         # Modify the message
-        if event.msgCallback is not None:
-            await event.msgCallback(event)
+        if (event.msgCallback is not None) and (event.msgCallback in self.callbacks):
+            print('Modifying event')
+            await self.callbacks[event.msgCallback](event)
+
+
+    def cog_unload(self):
+        print('VVVVVVVVVVVVVVVVVVVVVV')
+        try:
+            with open(self.jsonFileName, 'w+') as f:
+                json.dump(self.trackedItems, f, default=Tracker.encode, indent=4)
+        except Exception as e:
+            print('got exception')
+            print(e)
+        print('^^^^^^^^^^^^^^^^^^^^^^')
+        print('reactTracker unloading')
+        #with open('reactTracker.json', 'w+') as f:
+        #    f.write(json.dumps(self.trackedItems, cls=Tracker.encode))
