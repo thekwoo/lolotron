@@ -11,12 +11,15 @@ import tracker
 class rsvp(commands.Cog):
     # Globals?
     rsvpEmoji = '\U0001F64B'
-    templateMessageBody = \
+    templateMessageHead = \
     '''
     Posted by: {}
-    {}
+    '''
 
-    Please react to this message with :raising_hand: to join.
+    templateMessageBody = \
+    '''
+
+    Please react to this message with {} to join.
     Removing your reaction will lose your spot in the queue.
 
     Signup:
@@ -43,14 +46,25 @@ class rsvp(commands.Cog):
     Helper function that generates the RSVP message
     '''
     async def msgGenerator(self, event:tracker.Tracker):
-        # Create the header
-        msg = textwrap.dedent(self.templateMessageBody.format(event.owner.display_name, event.message))
+        # Create the main message
+        # This is broken up this way to prevent stupid tabs from making indents look weird
+        msg  = textwrap.dedent(self.templateMessageHead.format(event.owner.display_name))
+        msg += event.message
+        msg += textwrap.dedent(self.templateMessageBody.format(self.rsvpEmoji))
+
+        # To prevent strange shenanigans, the owner is always first regardless if they have
+        # the appropriate react or not
+        msg += '1 - {}\n'.format(event.owner.display_name)
 
         # Iterate through the RSVP list in order, skipping entires that were cancelled
         # Also keep a counter for enumeration, but start with 1 index for non-programmers
-        cnt = 1
+        cnt = 2
         for e in event.entries:
-            if (e.valid) and (e.react == self.rsvpEmoji):
+            # Prevent the owner from being counted even if they reacted again
+            if e.user == event.owner:
+                continue
+
+            if (e.valid) and self.tracker.emojiCompare(e.react, self.rsvpEmoji):
                 msg += '{} - {}\n'.format(cnt, e.user.display_name)
 
         # Append the footer information
@@ -77,8 +91,6 @@ class rsvp(commands.Cog):
 
         # Finish setting up the RSVP Event Object
         t = self.tracker.createTrackedItem(msg, owner, msg=msgBody, callback=type(self).__name__)
-        firstEntry = tracker.trackerEntry(owner, self.rsvpEmoji, datetime.utcnow(), True)
-        t.entries.append(firstEntry)
 
         # Update the RSVP Message from the bot
         await self.msgGenerator(t)
@@ -110,7 +122,7 @@ class rsvp(commands.Cog):
             return
 
         if len(splitArg) > 1:
-            msg = splitArg[1]
+            msg = splitArg[1].strip()
         else:
             msg = None
 

@@ -11,9 +11,6 @@ from typing import Any,Dict,List,Tuple
 An entry in the tracker. These are essentially timestamped reacts. Since discord
 does not actually do any real accounting for these, we allow for tracking creation
 and removal via the valid field.
-
-Also, since reacts can either be emojis or custom things, we just store the string
-representation to make comparisons easier
 '''
 @dataclass
 class trackerEntry:
@@ -52,7 +49,7 @@ class trackerEntry:
         elif data['reactType'] == 'emoji':
             react = client.get_emoji(data['react'])
             if react is None:
-                print('Couldnt find emoji with ID {}'.data['react'])
+                print('Couldnt find emoji with ID {}'.format(data['react']))
         else:
             react = None
 
@@ -71,7 +68,7 @@ message     - The user's message, consumer dependent on how to use this
 msgObj      - The discordPy Message object for the message that is being tracked
 entries     - A list of trackerEntry which are reactions
 expire      - A datetime in UTC for when we will stop tracking this item
-msgCallback - A callback function to modify the message based on changes
+msgCallback - The name of the registered Cog to lookup the function for callback
 '''
 @dataclass
 class Tracker:
@@ -101,12 +98,12 @@ class Tracker:
 
     @classmethod
     async def decode(cls, client:commands.Bot, data:Dict[str, Any]):
-        print('in decode')
         owner = client.get_user(data['owner'])
-        print('owner: {}'.format(owner))
         message = data['msg']
-        print('message: {}'.format(message))
 
+        # There is no easy way to lookup a message given an ID. So
+        # instead we must search through all channels we can see, and
+        # try to find if they contain the message
         for c in client.get_all_channels():
             for tc in c.text_channels:
                 print(tc)
@@ -122,19 +119,15 @@ class Tracker:
             break
         else:
             msgObj = None
-        print("msgObj: {}".format(msgObj))
 
         entries = []
         for e in data['entries']:
             entries.append(trackerEntry.decode(client, e))
-        print("entries: {}".format(entries))
 
         expire = datetime.utcfromtimestamp(data['expire'])
-        print('expire: {}'.format(expire))
         msgCallback = data['callback']
 
         return Tracker(owner, message, msgObj, entries, expire, msgCallback)
-
 
 '''
 A Cog that tracks reactions to a message
@@ -151,6 +144,7 @@ class reactTracker(commands.Cog):
         bot.loop.create_task(self.gc_task())
 
     '''
+    Adds a lookup for a Cog to a callback function
     '''
     def registerCallbacks(self, name, func):
         self.callbacks[name] = func
@@ -195,21 +189,19 @@ class reactTracker(commands.Cog):
             return
 
     '''
+    A scheduled task to load previously saved setttings. This must be its own
+    function rather than being done at startup becuase we need to do some
+    async lookups from the server, which cannot be dont in _init_
     '''
     async def load_settings(self):
+        # Need to wait until we're actually connected so we can do some of the lookups
         await self.bot.wait_until_ready()
 
         try:
             with open(self.jsonFileName, 'r') as f:
                 jsonData = json.loads(f.read())
 
-            print("read the following data:")
-            print(jsonData)
-            print('===========================')
-
             for k,v in jsonData.items():
-                print(k)
-                print(v)
                 t = await Tracker.decode(self.bot, v)
                 self.trackedItems[int(k)] = t
 
@@ -218,8 +210,8 @@ class reactTracker(commands.Cog):
             print(e)
             pass
 
+        # Debug info
         print(self.trackedItems)
-
 
     '''
     A task that periodically runs the garbage collector
@@ -255,16 +247,27 @@ class reactTracker(commands.Cog):
     Helper function to compare emojis. Since emojis may be represented as a unicode string,
     a custom emoji (with and ID) or an included emoji (possbily without and id) this function
     tries to figure out what is there and compare accordingly.
-
-    The a parameter should always be a PartialEmoji, but b parameter can be anything emoji like
     '''
-    def emojiCompare(self, a:discord.PartialEmoji, b) -> bool:
-        if isinstance(b, str):
+    def emojiCompare(self, a, b) -> bool:
+        # Debug
+        print('A: Type is {}, {}'.format(type(a), a))
+        print('B: Type is {}, {}'.format(type(b), b))
+
+        # Both are unicode strings
+        if isinstance(a, str) and isinstance(b, str):
+            return a == b
+        # A is a unicode string, B is some emoji class
+        elif isinstance(a, str) and (not isinstance(b, str)):
+            return a == b.name
+        # A is some emoji class, B is a unicode string
+        elif (not isinstance(a, str)) and isinstance(b, str):
             return a.name == b
+        # A and B are some emoji class, and both have IDs
         elif (a.id is not None) and (b.id is not None):
             return a.id == b.id
+        # A and B are some emoji class, but one doesn't have an ID
         else:
-            a.name == b.name
+            return a.name == b.name
 
     '''
     Adds the user to the list of tracked events
@@ -362,15 +365,15 @@ class reactTracker(commands.Cog):
             await self.callbacks[event.msgCallback](event)
 
 
+    '''
+    An unloading function when things shutdown nicely. We try to save any in flight
+    states we may have so that coming back we will pick up right where we left off.
+    '''
     def cog_unload(self):
-        print('VVVVVVVVVVVVVVVVVVVVVV')
         try:
             with open(self.jsonFileName, 'w+') as f:
                 json.dump(self.trackedItems, f, default=Tracker.encode, indent=4)
         except Exception as e:
             print('got exception')
             print(e)
-        print('^^^^^^^^^^^^^^^^^^^^^^')
         print('reactTracker unloading')
-        #with open('reactTracker.json', 'w+') as f:
-        #    f.write(json.dumps(self.trackedItems, cls=Tracker.encode))
