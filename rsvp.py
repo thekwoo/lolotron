@@ -14,6 +14,7 @@ class rsvp(commands.Cog):
     templateMessageHead = \
     '''
     Posted by: {}
+
     '''
 
     templateMessageBody = \
@@ -66,6 +67,7 @@ class rsvp(commands.Cog):
 
             if (e.valid) and self.tracker.emojiCompare(e.react, self.rsvpEmoji):
                 msg += '{} - {}\n'.format(cnt, e.user.display_name)
+                cnt += 1
 
         # Append the footer information
         msg += textwrap.dedent(self.templateMessageFoot.format(event.msgObj.id, event.expire))
