@@ -9,8 +9,12 @@ from typing import Any,Dict,List,Tuple
 import tracker
 
 class rsvp(commands.Cog):
-    # Globals?
-    rsvpEmoji = '\U0001F64B'
+    """ Create event RSVPs.
+
+    RSVPs allow for orderly tracking of sign-ups.
+    """
+    rsvpEmoji = discord.PartialEmoji(False, 'tempest', 556941054277058560)
+
     templateMessageHead = \
     '''
     Posted by: {}
@@ -74,15 +78,17 @@ class rsvp(commands.Cog):
 
         await event.msgObj.edit(content = msg)
 
-    '''
-    Just a group container that acts as a wrapper as well
-    '''
     @commands.group(pass_context=True)
     async def rsvp(self, ctx):
         if ctx.invoked_subcommand is None:
-            print('Should do some help here?')
+            await self.bot.send_cmd_help(ctx)
 
-    @rsvp.command()
+        pass
+
+    @rsvp.command(brief = '''Create a new RSVP event''',
+                  help  = '''Create a new RSVP event. All text after the "add" command will be used in the message
+                           as is. You can use any basic discord or serer hosted emoji in your text''',
+                  usage = '''<msg>''')
     async def add(self, ctx, *, msgBody):
         # Get the owner from the context
         owner = ctx.author
@@ -103,7 +109,10 @@ class rsvp(commands.Cog):
         # Delete the original message now that we're done parsing it
         await ctx.message.delete()
 
-    @rsvp.command()
+    @rsvp.command(brief = '''Edits an existing RSVP event message.''',
+                  help  = '''Edits an existing RSVP event message. Only the owner of the message can edit
+                           the message. The entire message is replaced and reparsed during this command.''',
+                  usage = '''<systemID> <msg>''')
     async def edit(self, ctx, *, arg):
         # Ignore ourselves
         if ctx.author == self.bot.user:
@@ -148,7 +157,11 @@ class rsvp(commands.Cog):
         ## Delete the modifying message
         await ctx.message.delete()
 
-    @rsvp.command()
+    @rsvp.command(brief = '''Deletes an existing RSVP event message.''',
+                  help  = '''Deletes an existing RSVP message. Only the owner of the message can delete it.
+                           Deletion is permanent and un-recoverable. On completion, the entire history of
+                           the message is purged.''',
+                  usage = '''<systemID>''')
     async def delete(self, ctx, arg):
         ## Ignore ourselves
         if ctx.author == self.bot.user:
@@ -181,7 +194,3 @@ class rsvp(commands.Cog):
 
         ## Delete the modifying message
         await ctx.message.delete()
-
-    @rsvp.command()
-    async def extend(self, ctx, arg):
-        pass
