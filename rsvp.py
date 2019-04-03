@@ -80,9 +80,6 @@ class rsvp(commands.Cog):
 
     @commands.group(pass_context=True)
     async def rsvp(self, ctx):
-        if ctx.invoked_subcommand is None:
-            await self.bot.send_cmd_help(ctx)
-
         pass
 
     @rsvp.command(brief = '''Create a new RSVP event''',
