@@ -20,7 +20,7 @@ class rsvp(commands.Cog):
     # Maybe one day we can set this per server in settings...but that requires a bit
     # more work than I'm willing to do right now.
     # For HIDE:
-    rsvpEmoji = discord.PartialEmoji(False, 'YFTL', 510999387380645908)
+    rsvpEmoji = discord.PartialEmoji(False, 'nomcookie', 563107909828083742)
     # For Development:
     #rsvpEmoji = discord.PartialEmoji(False, 'tempest', 556941054277058560)
 
