@@ -2,6 +2,8 @@
 from datetime import datetime, timedelta
 import discord
 from discord.ext import commands
+import emoji
+import re
 import textwrap
 from typing import Any,Dict,List,Tuple
 
@@ -13,6 +15,13 @@ class rsvp(commands.Cog):
 
     RSVPs allow for orderly tracking of sign-ups.
     """
+
+
+    # Maybe one day we can set this per server in settings...but that requires a bit
+    # more work than I'm willing to do right now.
+    # For HIDE:
+    #rsvpEmoji = discord.PartialEmoji(False, 'YFTL', 510999387380645908)
+    # For Development:
     rsvpEmoji = discord.PartialEmoji(False, 'tempest', 556941054277058560)
 
     templateMessageHead = \
@@ -39,13 +48,20 @@ class rsvp(commands.Cog):
 
     expireTimeIncr = timedelta(days=1, hours=12)
 
+    # RegEx to search a message for a line starting with a discord emoji
+    emojiRegex = re.compile(r'(<:(\w*):(\d*)>)')
+
+    # Regex to search a message for a line starting with a unicode emoji
+    emojiList = map(lambda x: ''.join(x.split()), emoji.UNICODE_EMOJI.keys())
+    unicodeEmojiRegex = re.compile('|'.join(re.escape(p) for p in emojiList))
+
     def __init__(self, bot):
         self.bot = bot
 
         self.rsvps = {}
         self.tracker = self.bot.get_cog('reactTracker')
 
-        self.tracker.registerCallbacks(type(self).__name__, self.msgGenerator)
+        self.tracker.registerCallbacks(type(self).__name__, self.msgGenerator, self.parseMsg)
 
     '''
     Helper function that generates the RSVP message
@@ -57,26 +73,85 @@ class rsvp(commands.Cog):
         msg += event.message
         msg += textwrap.dedent(self.templateMessageBody.format(self.rsvpEmoji))
 
+        # First collect the list of valid signups as well as valid reacts to the special reacts
         # To prevent strange shenanigans, the owner is always first regardless if they have
         # the appropriate react or not
-        msg += '1 - {}\n'.format(event.owner.display_name)
-
-        # Iterate through the RSVP list in order, skipping entires that were cancelled
-        # Also keep a counter for enumeration, but start with 1 index for non-programmers
-        cnt = 2
+        signups = [event.owner]
+        sreacts = {}
         for e in event.entries:
-            # Prevent the owner from being counted even if they reacted again
-            if e.user == event.owner:
+            # Ignore invalid entries
+            if not e.valid:
                 continue
 
-            if (e.valid) and self.tracker.emojiCompare(e.react, self.rsvpEmoji):
-                msg += '{} - {}\n'.format(cnt, e.user.display_name)
-                cnt += 1
+            # Check if this is the signup react
+            if self.tracker.emojiCompare(e.react, self.rsvpEmoji):
+                # Prevent double counting if the owner reacted againg
+                if e.user in signups:
+                    continue
+
+                signups.append(e.user)
+                continue
+
+            # Check if this is a special react
+            for r in event.cogData:
+                if self.tracker.emojiCompare(e.react, r):
+                    if e.user in sreacts:
+                        sreacts[e.user].append(r)
+                    else:
+                        sreacts[e.user] = [r]
+
+        print('======================')
+        print('Signups:')
+        print(signups)
+        print('sreacts')
+        print(sreacts)
+        print('======================')
+
+        # Iterate through the RSVP list in order, skipping entires that were cancelled
+        # Signup list enumeration always starts at 1 for non-programmers
+        cnt = 1
+        for s in signups:
+            msg += '{} - {}'.format(cnt, s.display_name)
+            if s in sreacts:
+                msg += ' [ '
+                for r in sreacts[s]:
+                    msg += '{} '.format(r)
+                msg += ']'
+            msg += '\n'
+            cnt += 1
 
         # Append the footer information
         msg += textwrap.dedent(self.templateMessageFoot.format(event.msgObj.id, event.expire))
 
         await event.msgObj.edit(content = msg)
+
+    '''
+    Parsers a message for emojis that are at the start of the line, indicating that they
+    are special
+    '''
+    def parseMsg(self, event:tracker.Tracker):
+        trackedEmojis = []
+
+        for s in iter(event.message.splitlines()):
+            # Search if its a Discord style emoji first
+            matchObj = self.emojiRegex.search(s)
+            print(matchObj)
+            if matchObj is not None:
+                tEmoji = discord.PartialEmoji(False, matchObj.group(2), int(matchObj.group(3)))
+                trackedEmojis.append(tEmoji)
+                continue
+
+            # Next try to lookup the  by unicode
+            matchObj = self.unicodeEmojiRegex.search(s)
+            print(matchObj)
+            if matchObj is not None:
+                tEmoji = discord.PartialEmoji(False, matchObj.group(0), None)
+                trackedEmojis.append(tEmoji)
+                continue
+
+        event.cogData = trackedEmojis
+        print(trackedEmojis)
+
 
     @commands.group(pass_context=True)
     async def rsvp(self, ctx):
@@ -95,13 +170,19 @@ class rsvp(commands.Cog):
         msg = await ctx.channel.send('Preparing an RSVP message...')
 
         # Finish setting up the RSVP Event Object
-        t = self.tracker.createTrackedItem(msg, owner, msg=msgBody, callback=type(self).__name__)
+        t = self.tracker.createTrackedItem(msg, owner, msg=msgBody, cogOwner=type(self).__name__)
+
+        # Search for special emojis
+        self.parseMsg(t)
 
         # Update the RSVP Message from the bot
         await self.msgGenerator(t)
 
         # For convenience, add the reaction to the post so people don't have to dig it up
         await t.msgObj.add_reaction(self.rsvpEmoji)
+
+        for e in t.cogData:
+            await t.msgObj.add_reaction(e)
 
         # Delete the original message now that we're done parsing it
         await ctx.message.delete()
@@ -147,8 +228,18 @@ class rsvp(commands.Cog):
             print('the called {} is not the owner {}'.format(ctx.author.display_name, event.owner.display_name))
             return
 
-        ## Update message
+        # Update Emojis
         event.message = msg
+        self.parseMsg(event)
+
+        for e in event.cogData:
+            for r in event.msgObj.reactions:
+                if e == r.emoji:
+                    break
+            else:
+                await event.msgObj.add_reaction(e)
+
+        ## Update message
         await self.msgGenerator(event)
 
         ## Delete the modifying message

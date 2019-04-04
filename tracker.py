@@ -63,21 +63,23 @@ A tracked item. This is essentially the message the bot will create, and a list 
 reactions to it via the above trackerEntry objects.
 
 Fields are as follows:
-owner       - The discord user who created this request
-message     - The user's message, consumer dependent on how to use this
-msgObj      - The discordPy Message object for the message that is being tracked
-entries     - A list of trackerEntry which are reactions
-expire      - A datetime in UTC for when we will stop tracking this item
-msgCallback - The name of the registered Cog to lookup the function for callback
+owner     - The discord user who created this request
+message   - The user's message, consumer dependent on how to use this
+msgObj    - The discordPy Message object for the message that is being tracked
+entries   - A list of trackerEntry which are reactions
+expire    - A datetime in UTC for when we will stop tracking this item
+cogData   - Cog defined data
+cogOwner  - The name of the registered Cog to lookup the function for callback
 '''
 @dataclass
 class Tracker:
-    owner:       discord.user
-    message:     str
-    msgObj:      discord.Message
-    entries:     List[trackerEntry]
-    expire:      datetime
-    msgCallback: str
+    owner:      discord.user
+    message:    str
+    msgObj:     discord.Message
+    entries:    List[trackerEntry]
+    expire:     datetime
+    cogData:    Any
+    cogOwner:   str
 
     @staticmethod
     def encode(data) -> Dict[str, Any]:
@@ -92,7 +94,7 @@ class Tracker:
             rtnData['entries'].append(trackerEntry.encode(e))
 
         rtnData['expire'] = data.expire.timestamp()
-        rtnData['callback'] = data.msgCallback
+        rtnData['cogOwner'] = data.cogOwner
 
         return rtnData
 
@@ -125,9 +127,9 @@ class Tracker:
             entries.append(trackerEntry.decode(client, e))
 
         expire = datetime.utcfromtimestamp(data['expire'])
-        msgCallback = data['callback']
+        cogOwner = data['cogOwner']
 
-        return Tracker(owner, message, msgObj, entries, expire, msgCallback)
+        return Tracker(owner, message, msgObj, entries, expire, None, cogOwner)
 
 '''
 A Cog that tracks reactions to a message
@@ -138,7 +140,8 @@ class reactTracker(commands.Cog):
         self.bot = bot
 
         self.trackedItems = {}
-        self.callbacks = {}
+        self.msgCb = {}
+        self.procCb = {}
 
         bot.loop.create_task(self.load_settings())
         bot.loop.create_task(self.gc_task())
@@ -146,23 +149,28 @@ class reactTracker(commands.Cog):
     '''
     Adds a lookup for a Cog to a callback function
     '''
-    def registerCallbacks(self, name, func):
-        self.callbacks[name] = func
-        print('Callback table is now:')
-        print(self.callbacks)
+    def registerCallbacks(self, name, msgCb, procCb):
+        self.msgCb[name]  = msgCb
+        self.procCb[name] = procCb
+
+        print('Message Callback table is now:')
+        print(self.msgCb)
+
+        print('Process Callback table is now:')
+        print(self.procCb)
 
     '''
     Creates a tracked object
     '''
     def createTrackedItem(self, msgObj:discord.Message, user:discord.user,
-                          msg:str='', callback=None, expire:datetime=None):
+                          msg:str='', cogOwner=None, usrdata=None, expire:datetime=None):
 
         if expire is None:
             expireTime = datetime.utcnow() + timedelta(days=1, hours=12)
         else:
             expireTime = expire
 
-        t = Tracker(user, msg, msgObj, [], expireTime, callback)
+        t = Tracker(user, msg, msgObj, [], expireTime, usrdata, cogOwner)
 
         self.trackedItems[msgObj.id] = t
         return t
@@ -209,6 +217,11 @@ class reactTracker(commands.Cog):
             print('loading exception')
             print(e)
             pass
+
+        # Call registered process handlers for all the items now
+        for k,v in self.trackedItems.items():
+            if (v.cogOwner is not None) and (v.cogOwner in self.procCb):
+                self.procCb[v.cogOwner](v)
 
         # Debug info
         print(self.trackedItems)
@@ -312,9 +325,9 @@ class reactTracker(commands.Cog):
         #debug
         print(event)
 
-        if (event.msgCallback is not None) and (event.msgCallback in self.callbacks):
+        if (event.cogOwner is not None) and (event.cogOwner in self.msgCb):
             print('Modifying event')
-            await self.callbacks[event.msgCallback](event)
+            await self.msgCb[event.cogOwner](event)
 
     '''
     Removes the user from the list of tracked events
@@ -360,9 +373,9 @@ class reactTracker(commands.Cog):
         print(event)
 
         # Modify the message
-        if (event.msgCallback is not None) and (event.msgCallback in self.callbacks):
+        if (event.cogOwner is not None) and (event.cogOwner in self.msgCb):
             print('Modifying event')
-            await self.callbacks[event.msgCallback](event)
+            await self.msgCb[event.cogOwner](event)
 
 
     '''
