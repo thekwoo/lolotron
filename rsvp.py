@@ -20,9 +20,9 @@ class rsvp(commands.Cog):
     # Maybe one day we can set this per server in settings...but that requires a bit
     # more work than I'm willing to do right now.
     # For HIDE:
-    #rsvpEmoji = discord.PartialEmoji(False, 'YFTL', 510999387380645908)
+    rsvpEmoji = discord.PartialEmoji(False, 'YFTL', 510999387380645908)
     # For Development:
-    rsvpEmoji = discord.PartialEmoji(False, 'tempest', 556941054277058560)
+    #rsvpEmoji = discord.PartialEmoji(False, 'tempest', 556941054277058560)
 
     templateMessageHead = \
     '''
@@ -100,14 +100,7 @@ class rsvp(commands.Cog):
                     else:
                         sreacts[e.user] = [r]
 
-        print('======================')
-        print('Signups:')
-        print(signups)
-        print('sreacts')
-        print(sreacts)
-        print('======================')
-
-        # Iterate through the RSVP list in order, skipping entires that were cancelled
+        # Go through the signup list in order, adding special reacts if applicable
         # Signup list enumeration always starts at 1 for non-programmers
         cnt = 1
         for s in signups:
@@ -151,7 +144,6 @@ class rsvp(commands.Cog):
 
         event.cogData = trackedEmojis
         print(trackedEmojis)
-
 
     @commands.group(pass_context=True)
     async def rsvp(self, ctx):
