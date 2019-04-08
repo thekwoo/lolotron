@@ -20,9 +20,9 @@ class rsvp(commands.Cog):
     # Maybe one day we can set this per server in settings...but that requires a bit
     # more work than I'm willing to do right now.
     # For HIDE:
-    rsvpEmoji = discord.PartialEmoji(False, 'nomcookie', 563107909828083742)
+    #rsvpEmoji = discord.PartialEmoji(False, 'nomcookie', id=563107909828083742)
     # For Development:
-    #rsvpEmoji = discord.PartialEmoji(False, 'tempest', 556941054277058560)
+    rsvpEmoji = discord.PartialEmoji(animated=False, name='tempest', id=556941054277058560)
 
     templateMessageHead = \
     '''
@@ -130,7 +130,7 @@ class rsvp(commands.Cog):
             matchObj = self.emojiRegex.search(s)
             print(matchObj)
             if matchObj is not None:
-                tEmoji = discord.PartialEmoji(False, matchObj.group(2), int(matchObj.group(3)))
+                tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(2), id=int(matchObj.group(3)))
                 trackedEmojis.append(tEmoji)
                 continue
 
@@ -138,7 +138,7 @@ class rsvp(commands.Cog):
             matchObj = self.unicodeEmojiRegex.search(s)
             print(matchObj)
             if matchObj is not None:
-                tEmoji = discord.PartialEmoji(False, matchObj.group(0), None)
+                tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(0), id=None)
                 trackedEmojis.append(tEmoji)
                 continue
 
@@ -185,7 +185,7 @@ class rsvp(commands.Cog):
                   usage = '''<systemID> <msg>''')
     async def edit(self, ctx, *, arg):
         # Ignore ourselves
-        if ctx.author == self.bot.user:
+        if ctx.author.id == self.bot.user.id:
             return
 
         # Split the arguments, the first should be the message ID and the second is the string
@@ -244,7 +244,7 @@ class rsvp(commands.Cog):
                   usage = '''<systemID>''')
     async def delete(self, ctx, arg):
         ## Ignore ourselves
-        if ctx.author == self.bot.user:
+        if ctx.author.id == self.bot.user.id:
             return
 
         try:
