@@ -14,7 +14,7 @@ and removal via the valid field.
 '''
 @dataclass
 class trackerEntry:
-    user:       discord.user
+    user:       discord.Member
     react:      discord.Emoji or str
     timeStamp:  datetime
     valid:      bool
@@ -73,7 +73,7 @@ cogOwner  - The name of the registered Cog to lookup the function for callback
 '''
 @dataclass
 class Tracker:
-    owner:      discord.user
+    owner:      discord.Member
     message:    str
     msgObj:     discord.Message
     entries:    List[trackerEntry]
@@ -86,6 +86,7 @@ class Tracker:
         rtnData = {}
 
         rtnData['owner'] = data.owner.id
+        rtnData['ownerGuild'] = data.owner.guild.id
         rtnData['msg']   = data.message
         rtnData['msgId'] = data.msgObj.id
 
@@ -100,7 +101,11 @@ class Tracker:
 
     @classmethod
     async def decode(cls, client:commands.Bot, data:Dict[str, Any]):
-        owner = client.get_user(data['owner'])
+        #owner = client.get_user(data['owner'])
+        ownerGuild = await client.fetch_guild(data['ownerGuild'])
+        owner = ownerGuild.get_member(data['owner'])
+
+        user = await guild.fetch_member(payload.user_id)
         message = data['msg']
 
         # There is no easy way to lookup a message given an ID. So
@@ -291,12 +296,24 @@ class reactTracker(commands.Cog):
         # We thankfully can skip looking up the guild and just find the channel ID, which will
         # also cover the cases of private messages
         channel = self.bot.get_channel(payload.channel_id)
-        message = await channel.fetch_message(payload.message_id)
-        user    = self.bot.get_user(payload.user_id)
         emoji   = payload.emoji
+        message = await channel.fetch_message(payload.message_id)
+        guild   = await self.bot.fetch_guild(payload.guild_id)
+        print('Got guild: {}'.format(guild))
+
+        # Try to look up the user in the guild to try to get the member
+        # but if it fails we'll need to fallback to using a standard user lookup
+        user = await guild.fetch_member(payload.user_id)
+        print('Fetched member: {}'.format(user))
+        if user is None:
+            user = self.bot.get_user(payload.user_id)
+        print('Fetched user: {}'.format(user))
+
+
 
         # Ignore ourselves
-        if user == self.bot.user:
+        if user.id == self.bot.user.id:
+            print('I ignored outselves')
             return
 
         # Run garbage collection so that we don't process expired events
@@ -339,8 +356,14 @@ class reactTracker(commands.Cog):
         # also cover the cases of private messages
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
-        user    = self.bot.get_user(payload.user_id)
         emoji   = payload.emoji
+        guild   = await self.bot.fetch_guild(payload.guild_id)
+
+        # Try to look up the user in the guild to try to get the member
+        # but if it fails we'll need to fallback to using a standard user lookup
+        user = await guild.fetch_member(payload.user_id)
+        if user is None:
+            user = self.bot.get_user(payload.user_id)
 
         # Grab the message ID to see if we should even try to parse stuff
         msgId = message.id
