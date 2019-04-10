@@ -1,4 +1,5 @@
 import asyncio
+from collections import namedtuple
 from dataclasses import dataclass
 from datetime import datetime,timedelta
 import discord
@@ -6,6 +7,11 @@ from discord.ext import commands
 from enum import Enum, auto
 import json
 from typing import Any,Dict,List,Tuple
+
+'''
+A convenience container for unpacking a rawReactionPayload from IDs to discord objects
+'''
+_rawReactionPayload = namedtuple('_rawReactionPayload', ['user', 'guild', 'channel', 'message', 'emoji'])
 
 '''
 An entry in the tracker. These are essentially timestamped reacts. Since discord
@@ -141,6 +147,7 @@ A Cog that tracks reactions to a message
 '''
 class reactTracker(commands.Cog):
     jsonFileName = 'reactTracker.json'
+
     def __init__(self, bot):
         self.bot = bot
 
@@ -265,6 +272,8 @@ class reactTracker(commands.Cog):
     Helper function to compare emojis. Since emojis may be represented as a unicode string,
     a custom emoji (with and ID) or an included emoji (possbily without and id) this function
     tries to figure out what is there and compare accordingly.
+    TODO: Is this still needed? Now that we use partialEmoji for everything, this is perhaps
+          redundant to the emoji class compare method, and likely less efficient
     '''
     def emojiCompare(self, a, b) -> bool:
         # Debug
@@ -288,16 +297,13 @@ class reactTracker(commands.Cog):
             return a.name == b.name
 
     '''
-    Adds the user to the list of tracked events
+    Converts a rawReactionActionEvent payload to objects
     '''
-    @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload):
-        # We need to go dig through everything to find the message T_T
-        # We thankfully can skip looking up the guild and just find the channel ID, which will
-        # also cover the cases of private messages
+    async def _unpackRawReaction(self, payload:discord.RawReactionActionEvent) -> _rawReactionPayload:
+
         channel = self.bot.get_channel(payload.channel_id)
-        emoji   = payload.emoji
         message = await channel.fetch_message(payload.message_id)
+        emoji   = payload.emoji
         guild   = await self.bot.fetch_guild(payload.guild_id)
         print('Got guild: {}'.format(guild))
 
@@ -309,10 +315,21 @@ class reactTracker(commands.Cog):
             user = self.bot.get_user(payload.user_id)
         print('Fetched user: {}'.format(user))
 
+        return _rawReactionPayload(user, guild, channel, message, emoji)
 
+    '''
+    Adds the user to the list of tracked events
+    '''
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload):
+        # Unpack the parameters
+        uPayload = await self._unpackRawReaction(payload)
+        message  = uPayload.message
+        emoji    = uPayload.emoji
+        user     = uPayload.user
 
         # Ignore ourselves
-        if user.id == self.bot.user.id:
+        if user == self.bot.user:
             print('I ignored outselves')
             return
 
@@ -351,19 +368,11 @@ class reactTracker(commands.Cog):
     '''
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload):
-        # We need to go dig through everything to find the message T_T
-        # We thankfully can skip looking up the guild and just find the channel ID, which will
-        # also cover the cases of private messages
-        channel = self.bot.get_channel(payload.channel_id)
-        message = await channel.fetch_message(payload.message_id)
-        emoji   = payload.emoji
-        guild   = await self.bot.fetch_guild(payload.guild_id)
-
-        # Try to look up the user in the guild to try to get the member
-        # but if it fails we'll need to fallback to using a standard user lookup
-        user = await guild.fetch_member(payload.user_id)
-        if user is None:
-            user = self.bot.get_user(payload.user_id)
+        # Unpack the parameters
+        uPayload = await self._unpackRawReaction(payload)
+        message  = uPayload.message
+        emoji    = uPayload.emoji
+        user     = uPayload.user
 
         # Grab the message ID to see if we should even try to parse stuff
         msgId = message.id
