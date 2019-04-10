@@ -41,12 +41,15 @@ class rsvp(commands.Cog):
 
     templateMessageFoot = \
     '''
-    ---------------------------------------------
+    ```
     SystemID: {}
     Expiration Time: {}
+    ```
     '''
 
-    expireTimeIncr = timedelta(days=2, hours=0)
+    expireTimeIncr = timedelta(days=3, hours=0)
+    expireTimeExt  = timedelta(days=1, hours=0)
+    expireTimeFmt  = '%A %b %d - %H:%M:%S %Z'
 
     # RegEx to search a message for a line starting with a discord emoji
     emojiRegex = re.compile(r'(<:(\w*):(\d*)>)')
@@ -114,7 +117,7 @@ class rsvp(commands.Cog):
             cnt += 1
 
         # Append the footer information
-        msg += textwrap.dedent(self.templateMessageFoot.format(event.msgObj.id, event.expire))
+        msg += textwrap.dedent(self.templateMessageFoot.format(event.msgObj.id, event.expire.strftime(self.expireTimeFmt)))
 
         await event.msgObj.edit(content = msg)
 
@@ -185,7 +188,7 @@ class rsvp(commands.Cog):
                   usage = '''<systemID> <msg>''')
     async def edit(self, ctx, *, arg):
         # Ignore ourselves
-        if ctx.author.id == self.bot.user.id:
+        if ctx.author == self.bot.user:
             return
 
         # Split the arguments, the first should be the message ID and the second is the string
@@ -221,6 +224,8 @@ class rsvp(commands.Cog):
             return
 
         # Update Emojis
+        # TODO: There is an edge case here where the edit will remove existing reacts. We currently don't remove
+        #       the ones we made ourselves, but we should probably consider it
         event.message = msg
         self.parseMsg(event)
 
@@ -243,34 +248,74 @@ class rsvp(commands.Cog):
                            the message is purged.''',
                   usage = '''<systemID>''')
     async def delete(self, ctx, arg):
-        ## Ignore ourselves
-        if ctx.author.id == self.bot.user.id:
+        # Ignore ourselves
+        if ctx.author == self.bot.user:
             return
 
+        # Delete the modifying message to indicate that we've processed it
+        await ctx.message.delete()
+
+        # Attempt to coerce the arguments from a string to an int and perform a lookup for the ID
         try:
             msgId = int(arg)
         except:
             print('Failed to convert rsvp delete argument to delete. Got {}'.format(arg))
             return
-
-        ## Skip modifying anything if we aren't tracking this message
-        if msgId is None:
-            print('Could not find {:d} in the tracker so ignoring this'.format(msgId))
-            return
         else:
             event = self.tracker.getTrackedItem(msgId)
 
-        ## Only the owner is allowed to delete
+        # Skip modifying anything if we aren't tracking this message
+        if event is None:
+            print('Could not find {:d} in the tracker so ignoring this'.format(msgId))
+            return
+
+        # Only the owner is allowed to delete
         if ctx.author != event.owner:
             print('Delete called by {} but is not the owner {}'.format(ctx.author.display_name, event.owner.display_name))
             return
 
-        ## Delete the message
+        # Delete the message
         await event.msgObj.delete()
         self.tracker.deleteTrackedItem(msgId)
 
-        ## Debug
+        # Debug
         print(self.rsvps)
 
-        ## Delete the modifying message
+    @rsvp.command(brief = '''Extends the duration of an existing RSVP event message.''',
+                  help  = '''Extends the duration of an existing RSVP message. Only the owner of the message can
+                           extend it. You can only add additional time, not remove. Extension is a set amount of
+                           time (referred to as a time unit) and cannot be adjusted by the user. The quantity
+                           provided is the number of time units to extend by.''',
+                  usage = '''<systemID> <quantity>''')
+    async def extend(self, ctx, sysId, qty):
+        ## Ignore ourselves
+        if ctx.author == self.bot.user:
+            return
+
+        # Delete the modifying message to indicate that we've processed it
         await ctx.message.delete()
+
+        ## Attempt to coerce the arguments from strings to ints
+        try:
+            msgId     = int(sysId)
+            timeUnits = int(qty)
+        except:
+            print('Failed to convert rsvp delete argument to delete. Got System ID: {}, Quantity: {}'.format(sysId, qty))
+            return
+        else:
+            event = self.tracker.getTrackedItem(msgId)
+
+        # Skip modifying anything if we aren't tracking this message
+        if event is None:
+            print('Could not find {:d} in the tracker so ignoring this'.format(msgId))
+            return
+
+        # Extend the message
+        extTime = self.expireTimeExt * timeUnits
+        event.expire += extTime
+
+        # Reprint the message
+        await self.msgGenerator(event)
+
+        # Debug
+        print(self.rsvps)

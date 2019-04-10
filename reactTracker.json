@@ -1,0 +1,26 @@
+{
+    "565637409551941633": {
+        "owner": 413179235327410178,
+        "ownerGuild": 451953436972417024,
+        "msg": "asl;dfjkasdf\n\ud83d\udca9 asdfasdf\n<:scrapper:556941053651976217> asdfasdf",
+        "msgId": 565637409551941633,
+        "entries": [
+            {
+                "user": 413179235327410178,
+                "reactType": "emoji",
+                "react": 556941053651976217,
+                "timeStamp": 1554954071.649887,
+                "valid": false
+            },
+            {
+                "user": 413179235327410178,
+                "reactType": "unicode",
+                "react": "\ud83d\udca9",
+                "timeStamp": 1554954075.130449,
+                "valid": true
+            }
+        ],
+        "expire": 1555256467.553327,
+        "cogOwner": "rsvp"
+    }
+}
