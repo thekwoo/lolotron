@@ -22,9 +22,9 @@ class rsvp(commands.Cog):
     # Note: This **MUST** be a PartialEmoji or Emoji object otherwise all of the compares
     #       will fall apart
     # For HIDE:
-    rsvpEmoji = discord.PartialEmoji(animated=False, name='nomcookie', id=563107909828083742)
+    #rsvpEmoji = discord.PartialEmoji(animated=False, name='nomcookie', id=563107909828083742)
     # For Development:
-    #rsvpEmoji = discord.PartialEmoji(animated=False, name='tempest', id=556941054277058560)
+    rsvpEmoji = discord.PartialEmoji(animated=False, name='tempest', id=556941054277058560)
 
     templateMessageHead = \
     '''
@@ -143,7 +143,8 @@ class rsvp(commands.Cog):
                 continue
 
             # Next try to lookup the  by unicode
-            matchObj = self.unicodeEmojiRegex.search(s)
+            #matchObj = self.unicodeEmojiRegex.search(s)
+            matchObj = emoji.get_emoji_regexp().search(s)
             print(matchObj)
             if matchObj is not None:
                 tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(0), id=None)
