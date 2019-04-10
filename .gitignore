@@ -1,1 +1,5 @@
+# Runtime caches
 __pycache__/*
+
+# Settings
+reactTracker.json
