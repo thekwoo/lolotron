@@ -107,11 +107,9 @@ class Tracker:
 
     @classmethod
     async def decode(cls, client:commands.Bot, data:Dict[str, Any]):
-        #owner = client.get_user(data['owner'])
         ownerGuild = await client.fetch_guild(data['ownerGuild'])
-        owner = ownerGuild.get_member(data['owner'])
+        owner = await ownerGuild.fetch_member(data['owner'])
 
-        user = await guild.fetch_member(payload.user_id)
         message = data['msg']
 
         # There is no easy way to lookup a message given an ID. So
@@ -269,34 +267,6 @@ class reactTracker(commands.Cog):
             self.trackedItems.pop(k)
 
     '''
-    Helper function to compare emojis. Since emojis may be represented as a unicode string,
-    a custom emoji (with and ID) or an included emoji (possbily without and id) this function
-    tries to figure out what is there and compare accordingly.
-    TODO: Is this still needed? Now that we use partialEmoji for everything, this is perhaps
-          redundant to the emoji class compare method, and likely less efficient
-    '''
-    def emojiCompare(self, a, b) -> bool:
-        # Debug
-        print('A: Type is {}, {}'.format(type(a), a))
-        print('B: Type is {}, {}'.format(type(b), b))
-
-        # Both are unicode strings
-        if isinstance(a, str) and isinstance(b, str):
-            return a == b
-        # A is a unicode string, B is some emoji class
-        elif isinstance(a, str) and (not isinstance(b, str)):
-            return a == b.name
-        # A is some emoji class, B is a unicode string
-        elif (not isinstance(a, str)) and isinstance(b, str):
-            return a.name == b
-        # A and B are some emoji class, and both have IDs
-        elif (a.id is not None) and (b.id is not None):
-            return a.id == b.id
-        # A and B are some emoji class, but one doesn't have an ID
-        else:
-            return a.name == b.name
-
-    '''
     Converts a rawReactionActionEvent payload to objects
     '''
     async def _unpackRawReaction(self, payload:discord.RawReactionActionEvent) -> _rawReactionPayload:
@@ -390,7 +360,7 @@ class reactTracker(commands.Cog):
         # Look for the user in the list. Since we are tracking all reacts, we need to
         # compare that it's the same user, emoji, and is the currently active one
         for e in event.entries:
-            if (e.user == user) and (e.valid) and self.emojiCompare(emoji, e.react):
+            if (e.user == user) and (e.valid) and (emoji == e.react):
                 rsvp = e
                 break
         else:

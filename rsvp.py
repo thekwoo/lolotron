@@ -19,6 +19,8 @@ class rsvp(commands.Cog):
 
     # Maybe one day we can set this per server in settings...but that requires a bit
     # more work than I'm willing to do right now.
+    # Note: This **MUST** be a PartialEmoji or Emoji object otherwise all of the compares
+    #       will fall apart
     # For HIDE:
     #rsvpEmoji = discord.PartialEmoji(False, 'nomcookie', id=563107909828083742)
     # For Development:
@@ -39,11 +41,13 @@ class rsvp(commands.Cog):
     Signup:
     '''
 
+    # TODO: This specifies that time is always in UTC, which is currently true.
+    #       But hopefully it won't always be that way
     templateMessageFoot = \
     '''
     ```
     SystemID: {}
-    Expiration Time: {}
+    Expiration Time: {} UTC
     ```
     '''
 
@@ -62,8 +66,9 @@ class rsvp(commands.Cog):
         self.bot = bot
 
         self.rsvps = {}
-        self.tracker = self.bot.get_cog('reactTracker')
 
+        # Register out callbacks with the reactionTracker
+        self.tracker = self.bot.get_cog('reactTracker')
         self.tracker.registerCallbacks(type(self).__name__, self.msgGenerator, self.parseMsg)
 
     '''
@@ -87,7 +92,7 @@ class rsvp(commands.Cog):
                 continue
 
             # Check if this is the signup react
-            if self.tracker.emojiCompare(e.react, self.rsvpEmoji):
+            if e.react == self.rsvpEmoji:
                 # Prevent double counting if the owner reacted againg
                 if e.user in signups:
                     continue
@@ -97,7 +102,7 @@ class rsvp(commands.Cog):
 
             # Check if this is a special react
             for r in event.cogData:
-                if self.tracker.emojiCompare(e.react, r):
+                if e.react == r:
                     if e.user in sreacts:
                         sreacts[e.user].append(r)
                     else:
