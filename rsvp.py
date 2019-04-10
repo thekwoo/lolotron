@@ -46,7 +46,7 @@ class rsvp(commands.Cog):
     Expiration Time: {}
     '''
 
-    expireTimeIncr = timedelta(days=1, hours=12)
+    expireTimeIncr = timedelta(days=2, hours=0)
 
     # RegEx to search a message for a line starting with a discord emoji
     emojiRegex = re.compile(r'(<:(\w*):(\d*)>)')
