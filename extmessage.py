@@ -150,7 +150,7 @@ class ExtMessage():
         # There should only be reactions on the last message in the chain
         await self.msgObjs[-1].clear_reactions()
 
-    async def clean_reactons(self):
+    async def clean_reactions(self):
         # Clears all reacts except on the last message
         for m in self.msgObjs[:-1]:
             await m.clear_reactions()

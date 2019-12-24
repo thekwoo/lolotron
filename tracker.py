@@ -5,6 +5,7 @@ from datetime import datetime,timedelta
 import discord
 from discord.ext import commands
 from enum import Enum, auto
+import extmessage
 import json
 from typing import Any,Dict,List,Tuple
 
@@ -244,7 +245,7 @@ class reactTracker(commands.Cog):
 
         while not self.bot.is_closed():
             print('Running GC from automated task')
-            await self.gc()
+            self.gc()
             # Sleep until time to run again
             await asyncio.sleep(120)
 
@@ -252,7 +253,7 @@ class reactTracker(commands.Cog):
     A garbage collection function. This mainly cleans up the tracked list of expired
     events
     '''
-    async def gc(self):
+    def gc(self):
         expiredList = []
         cTime = datetime.utcnow()
 
@@ -300,35 +301,46 @@ class reactTracker(commands.Cog):
 
         # Ignore ourselves
         if user == self.bot.user:
-            print('I ignored outselves')
             return
 
         # Run garbage collection so that we don't process expired events
-        await self.gc()
+        self.gc()
 
         # Grab the message ID to see if we should even try to parse stuff
         msgId = message.id
 
         # Skip modifying anything if we aren't tracking on this message
-        if msgId not in self.trackedItems:
-            print('could not find {:d} in the tracker so ignoring this'.format(msgId))
-            return
+        for itemId,item in self.trackedItems.items():
+            # Extended Message Objects need to have extra checks against all messages they contain
+            # We also need to locate the tracker item by the actual ID it's store as instead of potentially
+            # a message in the middle of the object
+            if isinstance(item.msgObj, extmessage.ExtMessage) and (item.msgObj.check_ids(msgId)):
+                event = self.trackedItems[item.msgObj.id]
+                break
+            # Normal discordPy Message Object can just match the itemId (the message ID)
+            elif itemId == msgId:
+                event = item
+                break
         else:
-            event = self.trackedItems[msgId]
+            print('Tracker Reaction Add: Could not find {:d} in the tracker so ignoring this'.format(msgId))
+            return
+
+        # Purge reacts not on the main message if it is an extended message
+        if (isinstance(event.msgObj, extmessage.ExtMessage) and (event.msgObj.id != msgId)):
+            print('Tracker Reaction Add: Purged reacts that arent to the last message in a ExtMessage')
+            await event.msgObj.clean_reactions()
+            return
 
         # Check if the user is already in the list, this should really just be an edge case for the owner
         for e in event.entries:
             if (e.user == user) and (e.react == emoji) and (e.valid):
-                print('exiting earlier')
                 return
 
         # Add RSVP to the list
         newEntry = trackerEntry(user, emoji, datetime.utcnow(), True)
         event.entries.append(newEntry)
 
-        #debug
-        print(event)
-
+        # Run any callbacks that the Cog who created the tracker requested
         if (event.cogOwner is not None) and (event.cogOwner in self.msgCb):
             print('Modifying event')
             await self.msgCb[event.cogOwner](event)
@@ -348,7 +360,7 @@ class reactTracker(commands.Cog):
         msgId = message.id
 
         # Run garbage collection so that we don't process expired events
-        await self.gc()
+        self.gc()
 
         # Skip modifying anything if we aren't tracking on this message
         if msgId not in self.trackedItems:
@@ -360,7 +372,7 @@ class reactTracker(commands.Cog):
         # Look for the user in the list. Since we are tracking all reacts, we need to
         # compare that it's the same user, emoji, and is the currently active one
         for e in event.entries:
-            if (e.user == user) and (e.valid) and (emoji == e.react):
+            if (e.user == user) and (emoji == e.react) and (e.valid):
                 rsvp = e
                 break
         else:
@@ -371,12 +383,8 @@ class reactTracker(commands.Cog):
         # For auditing's sake, we don't delete entries, only invalidate them
         rsvp.valid = False
 
-        # Debug
-        print(event)
-
-        # Modify the message
+        # Run any callbacks that the Cog who created the tracker requested
         if (event.cogOwner is not None) and (event.cogOwner in self.msgCb):
-            print('Modifying event')
             await self.msgCb[event.cogOwner](event)
 
 
