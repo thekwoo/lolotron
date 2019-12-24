@@ -5,10 +5,10 @@ from typing import Any,List,Dict,Tuple
 
 class ExtMessage():
     # This is the string to use to make a seemingly blank message
-    __BLANK_STR__ = '_ _'
+    BLANK_STR = '_ _'
 
     # This is the maximum length of a Discord Message
-    __MAX_CHAR_LEN__ = 2000
+    MAX_MSG_LEN = 2000
 
     def __init__(self, msgCnt:int=4, msgRsv:int=2, msg:str=''):
         self.msg    = msg
@@ -17,7 +17,7 @@ class ExtMessage():
         # See how many messages are required
         # We take the larger of the requested count or the message plus the reserved amount (to account)
         # for growth
-        reqMessages = math.ceil(len(self.msg) / self.__MAX_CHAR_LEN__)
+        reqMessages = math.ceil(len(self.msg) / self.MAX_MSG_LEN)
 
         if ((reqMessages + msgRsv) > msgCnt):
             self.msgCnt = reqMessages + msgRsv
@@ -31,14 +31,14 @@ class ExtMessage():
     def splitMessageLine(self, msg:str, length:int=None) -> List[str]:
         # Set the split length to the message default unless it has been specified
         if length is None:
-            length = self.__MAX_CHAR_LEN__
+            length = self.MAX_MSG_LEN
 
         splitMsg = []
         newStr = ''
 
         # Break the line here is it would run over the limit
         for w in msg.split():
-            if ((len(newStr) + len(w) + 1) > self.__MAX_CHAR_LEN__):
+            if ((len(newStr) + len(w) + 1) > self.MAX_MSG_LEN):
                 splitMsg.append(newStr)
                 newStr = ''
 
@@ -61,7 +61,7 @@ class ExtMessage():
         # If the line is too long, we break it up to the limits
         newMsgSplitByLine = []
         for m in msgSplitByLine:
-            if (len(m) > self.__MAX_CHAR_LEN__):
+            if (len(m) > self.MAX_MSG_LEN):
                 newMsgSplitByLine.extend(self.splitMessageLine(m))
             else:
                 newMsgSplitByLine.append(m)
@@ -71,7 +71,7 @@ class ExtMessage():
         i = 0
         for m in newMsgSplitByLine:
             # Check if we have room in this message, or need to move onto the next message
-            if (len(splitMsg[i]) + len(m) > self.__MAX_CHAR_LEN__):
+            if (len(splitMsg[i]) + len(m) > self.MAX_MSG_LEN):
                 # If this was the last message, raise an error
                 if (i+1 == self.msgCnt):
                     raise ValueError('Out of characters across all messages for message')
@@ -83,7 +83,7 @@ class ExtMessage():
         # Fill all unused messages with blank strings
         for i in range(self.msgCnt):
             if (splitMsg[i] == ''):
-                splitMsg[i] = self.__BLANK_STR__
+                splitMsg[i] = self.BLANK_STR
 
         return splitMsg 
 
@@ -101,7 +101,7 @@ class ExtMessage():
     async def edit(self, content:str):
         # Make sure the new message is not too long
         msgLen = len(content)
-        maxChars = self.msgCnt * self.__MAX_CHAR_LEN__
+        maxChars = self.msgCnt * self.MAX_MSG_LEN
         if (msgLen > maxChars):
             raise ValueError('New message of length {} is larger than max that can represented {}') 
 
@@ -133,6 +133,10 @@ class ExtMessage():
 
     async def unpin(self):
         raise NotImplementedError()
+
+    @property
+    def reactions(self):
+        return self.msgObjs[-1].reactions
 
     async def add_reaction(self, emoji):
         # Only add reactions to the last message in the chain

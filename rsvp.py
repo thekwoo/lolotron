@@ -202,55 +202,67 @@ class rsvp(commands.Cog):
         if ctx.author == self.bot.user:
             return
 
-        # Split the arguments, the first should be the message ID and the second is the string
-        # that will become the message
-        splitArg = arg.split('\n', 1)
-
-        # If we only got 1 thing, it might be all on the same line, so now break it up by spaces
-        if len(splitArg) == 1:
-            splitArg = splitArg[0].split(' ', 1)
-
-        if len(splitArg) > 0:
-            msgId = int(splitArg[0])
-        else:
+        # Attempt to get the message ID. Ideally it is the only thing on the first line, but 
+        # in the case that it's not, we will need to hack up the line to first the first argument
+        # that is surrounded by spaces
+        try:
+            argSplitLine = arg.splitlines(keepends=True)
+            argSplitSpace = argSplitLine[0].split(' ')
+            msgId = int(argSplitSpace[0].strip())
+        except:
             print('RSVP Edit did not get a message ID, so we cant do anything. Skipping...')
+            await ctx.send('RSVP Edit could not parse out a message ID to edit. Please check your syntax.\n' + 
+                           'It should be: edit <message ID> <new Message>')
             return
 
-        if len(splitArg) > 1:
-            msg = splitArg[1].strip()
-        else:
-            msg = None
-
-        # Skip modifying anything if we aren't tracking on this message
-        if msgId is None:
-            print('could not find {:d} in the tracker so ignoring this'.format(msgId))
+        # Use the rest of the arg as the message
+        # Depending on if the message was on the same line as the message ID or not, we probably want to strip
+        # the ends to clear extra spaces and whatnot
+        try:
+            msg = arg[(len(argSplitSpace[0])):].strip()
+        except:
+            print('RSVP Edit did not get a new message, so we cant do anything. Skipping...')
+            await ctx.send('RSVP Edit could not parse out a message for the edit. Please check your syntax.\n' + 
+                           'It should be: edit <message ID> <new Message>')
             return
-        else:
-            event = self.tracker.getTrackedItem(msgId)
-            print(event)
+
+        # Grab the event and make sure we can operate on it
+        event = self.tracker.getTrackedItem(msgId)
+        print(event)
+        if event is None:
+            print('RSVP Edit is not tracking anything with ID {}. Skipping...'.format(msgId))
+            await ctx.send('RSVP Edit could not find a message that is active with ID {}. Double check your message ID.'.format(msgId))
+            return
 
         ## Only the owner is allowed to edit
         if ctx.author != event.owner:
-            print('the called {} is not the owner {}'.format(ctx.author.display_name, event.owner.display_name))
+            print('RSVP Edit was called by {}, who is not the owner ({})'.format(
+                ctx.author.display_name,
+                event.owner.display_name))
+            await ctx.send('RSVP Edit can only be used on messages you own. You are {} but the owner is {}'.format(
+                ctx.author.display_name,
+                event.owner.display_name))
             return
 
         # Update Emojis
-        # TODO: There is an edge case here where the edit will remove existing reacts. We currently don't remove
-        #       the ones we made ourselves, but we should probably consider it
         event.message = msg
         self.parseMsg(event)
 
-        for e in event.cogData:
-            for r in event.msgObj.reactions:
-                if e == r.emoji:
+        # TODO: There is an edge case here where the edit will remove existing reacts. We currently don't remove
+        #       the ones we made ourselves, but we should probably consider it. It gets complicated as we will
+        #       need to determine not only that the emoji isn't in the tracked set now, but also that we were
+        #       the ones who created it, and then remove it
+        for trackedEmoji in event.cogData:
+            for react in event.msgObj.reactions:
+                if trackedEmoji == react.emoji:
                     break
             else:
-                await event.msgObj.add_reaction(e)
+                await event.msgObj.add_reaction(trackedEmoji)
 
-        ## Update message
+        # Update message
         await self.msgGenerator(event)
 
-        ## Delete the modifying message
+        # Delete the modifying message
         await ctx.message.delete()
 
     @rsvp.command(brief = '''Deletes an existing RSVP event message.''',
