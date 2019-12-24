@@ -8,6 +8,7 @@ import textwrap
 from typing import Any,Dict,List,Tuple
 
 # Internal Libraries
+import extmessage
 import tracker
 
 class rsvp(commands.Cog):
@@ -56,6 +57,7 @@ class rsvp(commands.Cog):
     expireTimeFmt  = '%A %b %d - %H:%M:%S %Z'
 
     # RegEx to search a message for a line starting with a discord emoji
+    # TODO: There is a bug where this will pick up reacts that aren't the first non-space in the line
     emojiRegex = re.compile(r'(<:(\w*):(\d*)>)')
 
     # Regex to search a message for a line starting with a unicode emoji
@@ -127,7 +129,7 @@ class rsvp(commands.Cog):
         await event.msgObj.edit(content = msg)
 
     '''
-    Parsers a message for emojis that are at the start of the line, indicating that they
+    Parses a message for emojis that are at the start of the line, indicating that they
     are special
     '''
     def parseMsg(self, event:tracker.Tracker):
@@ -168,7 +170,10 @@ class rsvp(commands.Cog):
 
         # We need to create a message and send it to get a messageID, since we use the messageID as the identifier
         # We will edit the actual content later
-        msg = await ctx.channel.send('Preparing an RSVP message...')
+        # We reserve for at least 4 messages since the RSVP is at most 1, overhead for header and footer are hopefully
+        # just 1, and leave 2 for signups.
+        msg = extmessage.ExtMessage(msgCnt=4, msg='Preparing an RSVP message...')
+        await msg.create(ctx.channel)
 
         # Finish setting up the RSVP Event Object
         t = self.tracker.createTrackedItem(msg, owner, msg=msgBody, cogOwner=type(self).__name__)
