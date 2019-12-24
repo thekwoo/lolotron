@@ -154,7 +154,9 @@ class reactTracker(commands.Cog):
         self.msgCb = {}
         self.procCb = {}
 
-        bot.loop.create_task(self.load_settings())
+        # Disable loading of saved reactTracker settings
+        # It's not used very often, and is currently partially broken with extended messages
+        #bot.loop.create_task(self.load_settings())
         bot.loop.create_task(self.gc_task())
 
     '''
@@ -393,10 +395,11 @@ class reactTracker(commands.Cog):
     states we may have so that coming back we will pick up right where we left off.
     '''
     def cog_unload(self):
-        try:
-            with open(self.jsonFileName, 'w+') as f:
-                json.dump(self.trackedItems, f, default=Tracker.encode, indent=4)
-        except Exception as e:
-            print('got exception')
-            print(e)
+        # Saving state is disabled. See explanation in the load_settings function
+        #try:
+        #    with open(self.jsonFileName, 'w+') as f:
+        #        json.dump(self.trackedItems, f, default=Tracker.encode, indent=4)
+        #except Exception as e:
+        #    print('got exception')
+        #    print(e)
         print('reactTracker unloading')
