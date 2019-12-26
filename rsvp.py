@@ -8,6 +8,7 @@ import textwrap
 from typing import Any,Dict,List,Tuple
 
 # Internal Libraries
+import extmessage
 import tracker
 
 class rsvp(commands.Cog):
@@ -56,7 +57,7 @@ class rsvp(commands.Cog):
     expireTimeFmt  = '%A %b %d - %H:%M:%S %Z'
 
     # RegEx to search a message for a line starting with a discord emoji
-    emojiRegex = re.compile(r'(<:(\w*):(\d*)>)')
+    emojiRegex = re.compile(r'^(<:(\w*):(\d*)>)')
 
     # Regex to search a message for a line starting with a unicode emoji
     emojiList = map(lambda x: ''.join(x.split()), emoji.UNICODE_EMOJI.keys())
@@ -127,29 +128,40 @@ class rsvp(commands.Cog):
         await event.msgObj.edit(content = msg)
 
     '''
-    Parsers a message for emojis that are at the start of the line, indicating that they
+    Parses a message for emojis that are at the start of the line, indicating that they
     are special
     '''
     def parseMsg(self, event:tracker.Tracker):
         trackedEmojis = []
 
         for s in iter(event.message.splitlines()):
+            # Remove all whitespace at the start of the line
+            sStrip = s.lstrip()
+
             # Search if its a Discord style emoji first
-            matchObj = self.emojiRegex.search(s)
+            matchObj = self.emojiRegex.search(sStrip)
             print(matchObj)
             if matchObj is not None:
                 tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(2), id=int(matchObj.group(3)))
-                trackedEmojis.append(tEmoji)
+
+                # Prevent duplicates from making it into the list
+                if tEmoji not in trackedEmojis:
+                    trackedEmojis.append(tEmoji)
                 continue
 
             # Next try to lookup the  by unicode
-            #matchObj = self.unicodeEmojiRegex.search(s)
-            matchObj = emoji.get_emoji_regexp().search(s)
-            print(matchObj)
-            if matchObj is not None:
-                tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(0), id=None)
-                trackedEmojis.append(tEmoji)
-                continue
+            # Check to make sure the first character ISNT a normal character since the emoji library's regex
+            # will find anything. This check allows us to make sure a unicode emoji is at the start of the line
+            if ((len(sStrip) > 0) and (sStrip[0].isascii())):
+                matchObj = emoji.get_emoji_regexp().search(sStrip)
+                print(matchObj)
+                if matchObj is not None:
+                    tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(0), id=None)
+
+                    # Prevent duplicates from making it into the list
+                    if tEmoji not in trackedEmojis:
+                        trackedEmojis.append(tEmoji)
+                    continue
 
         event.cogData = trackedEmojis
         print(trackedEmojis)
@@ -168,7 +180,10 @@ class rsvp(commands.Cog):
 
         # We need to create a message and send it to get a messageID, since we use the messageID as the identifier
         # We will edit the actual content later
-        msg = await ctx.channel.send('Preparing an RSVP message...')
+        # We reserve for at least 4 messages since the RSVP is at most 1, overhead for header and footer are hopefully
+        # just 1, and leave 2 for signups.
+        msg = extmessage.ExtMessage(msgCnt=4, msg='Preparing an RSVP message...')
+        await msg.create(ctx.channel)
 
         # Finish setting up the RSVP Event Object
         t = self.tracker.createTrackedItem(msg, owner, msg=msgBody, cogOwner=type(self).__name__)
@@ -197,55 +212,67 @@ class rsvp(commands.Cog):
         if ctx.author == self.bot.user:
             return
 
-        # Split the arguments, the first should be the message ID and the second is the string
-        # that will become the message
-        splitArg = arg.split('\n', 1)
-
-        # If we only got 1 thing, it might be all on the same line, so now break it up by spaces
-        if len(splitArg) == 1:
-            splitArg = splitArg[0].split(' ', 1)
-
-        if len(splitArg) > 0:
-            msgId = int(splitArg[0])
-        else:
-            print('RSVP Edit did not get a message ID, so we cant do anything. Skipping...')
+        # Attempt to get the message ID. Ideally it is the only thing on the first line, but 
+        # in the case that it's not, we will need to hack up the line to first the first argument
+        # that is surrounded by spaces
+        try:
+            argSplitLine = arg.splitlines(keepends=True)
+            argSplitSpace = argSplitLine[0].split(' ')
+            msgId = int(argSplitSpace[0].strip())
+        except:
+            print('RSVP Edit did not get a message ID, so we cant do anything. Arg was: {}'.format(arg))
+            await ctx.send('RSVP Edit could not parse out a message ID to edit. Please check your syntax.\n' + 
+                           'It should be: edit <message ID> <new Message>')
             return
 
-        if len(splitArg) > 1:
-            msg = splitArg[1].strip()
-        else:
-            msg = None
-
-        # Skip modifying anything if we aren't tracking on this message
-        if msgId is None:
-            print('could not find {:d} in the tracker so ignoring this'.format(msgId))
+        # Use the rest of the arg as the message
+        # Depending on if the message was on the same line as the message ID or not, we probably want to strip
+        # the ends to clear extra spaces and whatnot
+        try:
+            msg = arg[(len(argSplitSpace[0])):].strip()
+        except:
+            print('RSVP Edit did not get a new message, so we cant do anything. Skipping...')
+            await ctx.send('RSVP Edit could not parse out a message for the edit. Please check your syntax.\n' + 
+                           'It should be: edit <message ID> <new Message>')
             return
-        else:
-            event = self.tracker.getTrackedItem(msgId)
-            print(event)
+
+        # Grab the event and make sure we can operate on it
+        event = self.tracker.getTrackedItem(msgId)
+        print(event)
+        if event is None:
+            print('RSVP Edit is not tracking anything with ID {}. Skipping...'.format(msgId))
+            await ctx.send('RSVP Edit could not find a message that is active with ID {}. Double check your message ID.'.format(msgId))
+            return
 
         ## Only the owner is allowed to edit
         if ctx.author != event.owner:
-            print('the called {} is not the owner {}'.format(ctx.author.display_name, event.owner.display_name))
+            print('RSVP Edit was called by {}, who is not the owner ({})'.format(
+                ctx.author.display_name,
+                event.owner.display_name))
+            await ctx.send('RSVP Edit can only be used on messages you own. You are {} but the owner is {}'.format(
+                ctx.author.display_name,
+                event.owner.display_name))
             return
 
         # Update Emojis
-        # TODO: There is an edge case here where the edit will remove existing reacts. We currently don't remove
-        #       the ones we made ourselves, but we should probably consider it
         event.message = msg
         self.parseMsg(event)
 
-        for e in event.cogData:
-            for r in event.msgObj.reactions:
-                if e == r.emoji:
+        # TODO: There is an edge case here where the edit will remove existing reacts. We currently don't remove
+        #       the ones we made ourselves, but we should probably consider it. It gets complicated as we will
+        #       need to determine not only that the emoji isn't in the tracked set now, but also that we were
+        #       the ones who created it, and then remove it
+        for trackedEmoji in event.cogData:
+            for react in event.msgObj.reactions:
+                if trackedEmoji == react.emoji:
                     break
             else:
-                await event.msgObj.add_reaction(e)
+                await event.msgObj.add_reaction(trackedEmoji)
 
-        ## Update message
+        # Update message
         await self.msgGenerator(event)
 
-        ## Delete the modifying message
+        # Delete the modifying message
         await ctx.message.delete()
 
     @rsvp.command(brief = '''Deletes an existing RSVP event message.''',
@@ -258,34 +285,39 @@ class rsvp(commands.Cog):
         if ctx.author == self.bot.user:
             return
 
-        # Delete the modifying message to indicate that we've processed it
-        await ctx.message.delete()
-
         # Attempt to coerce the arguments from a string to an int and perform a lookup for the ID
         try:
             msgId = int(arg)
         except:
-            print('Failed to convert rsvp delete argument to delete. Got {}'.format(arg))
+            print('RSVP Delete did not get a message ID, so we cant do anything. Argument was: {}'.format(arg))
+            await ctx.send('RSVP Delete could not parse out a message ID to delete. Please check your syntax.\n' + 
+                           'It should be: delete <message ID>')
             return
         else:
             event = self.tracker.getTrackedItem(msgId)
 
         # Skip modifying anything if we aren't tracking this message
         if event is None:
-            print('Could not find {:d} in the tracker so ignoring this'.format(msgId))
+            print('RSVP Delete is not tracking anything with ID {}. Skipping...'.format(msgId))
+            await ctx.send('RSVP Delete could not find a message that is active with ID {}. Double check your message ID.'.format(msgId))
             return
 
         # Only the owner is allowed to delete
         if ctx.author != event.owner:
-            print('Delete called by {} but is not the owner {}'.format(ctx.author.display_name, event.owner.display_name))
+            print('RSVP Delete was called by {}, who is not the owner ({})'.format(
+                ctx.author.display_name,
+                event.owner.display_name))
+            await ctx.send('RSVP Delete can only be used on messages you own. You are {} but the owner is {}'.format(
+                ctx.author.display_name,
+                event.owner.display_name))
             return
 
         # Delete the message
         await event.msgObj.delete()
         self.tracker.deleteTrackedItem(msgId)
 
-        # Debug
-        print(self.rsvps)
+        # Delete the modifying message to indicate that we've processed it
+        await ctx.message.delete()
 
     @rsvp.command(brief = '''Extends the duration of an existing RSVP event message.''',
                   help  = '''Extends the duration of an existing RSVP message. Only the owner of the message can
@@ -294,26 +326,26 @@ class rsvp(commands.Cog):
                            provided is the number of time units to extend by.''',
                   usage = '''<systemID> <quantity>''')
     async def extend(self, ctx, sysId, qty):
-        ## Ignore ourselves
+        # Ignore ourselves
         if ctx.author == self.bot.user:
             return
 
-        # Delete the modifying message to indicate that we've processed it
-        await ctx.message.delete()
-
-        ## Attempt to coerce the arguments from strings to ints
+        # Attempt to coerce the arguments from strings to ints
         try:
             msgId     = int(sysId)
             timeUnits = int(qty)
         except:
-            print('Failed to convert rsvp delete argument to delete. Got System ID: {}, Quantity: {}'.format(sysId, qty))
+            print('RSVP Extend Failed to convert rsvp delete argument to delete. Got System ID: {}, Quantity: {}'.format(sysId, qty))
+            await ctx.send('RSVP Extend could not parse out a message ID or time quantity to extend. Please check your syntax.\n' + 
+                           'It should be: extend <message ID> <quantity>')
             return
         else:
             event = self.tracker.getTrackedItem(msgId)
 
         # Skip modifying anything if we aren't tracking this message
         if event is None:
-            print('Could not find {:d} in the tracker so ignoring this'.format(msgId))
+            print('RSVP Extend is not tracking anything with ID {}. Skipping...'.format(msgId))
+            await ctx.send('RSVP Extend could not find a message that is active with ID {}. Double check your message ID.'.format(msgId))
             return
 
         # Extend the message
@@ -323,5 +355,5 @@ class rsvp(commands.Cog):
         # Reprint the message
         await self.msgGenerator(event)
 
-        # Debug
-        print(self.rsvps)
+        # Delete the modifying message to indicate that we've processed it
+        await ctx.message.delete()
