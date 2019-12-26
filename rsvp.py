@@ -57,8 +57,7 @@ class rsvp(commands.Cog):
     expireTimeFmt  = '%A %b %d - %H:%M:%S %Z'
 
     # RegEx to search a message for a line starting with a discord emoji
-    # TODO: There is a bug where this will pick up reacts that aren't the first non-space in the line
-    emojiRegex = re.compile(r'(<:(\w*):(\d*)>)')
+    emojiRegex = re.compile(r'^(<:(\w*):(\d*)>)')
 
     # Regex to search a message for a line starting with a unicode emoji
     emojiList = map(lambda x: ''.join(x.split()), emoji.UNICODE_EMOJI.keys())
@@ -136,8 +135,11 @@ class rsvp(commands.Cog):
         trackedEmojis = []
 
         for s in iter(event.message.splitlines()):
+            # Remove all whitespace at the start of the line
+            sStrip = s.lstrip()
+
             # Search if its a Discord style emoji first
-            matchObj = self.emojiRegex.search(s)
+            matchObj = self.emojiRegex.search(sStrip)
             print(matchObj)
             if matchObj is not None:
                 tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(2), id=int(matchObj.group(3)))
@@ -148,16 +150,18 @@ class rsvp(commands.Cog):
                 continue
 
             # Next try to lookup the  by unicode
-            #matchObj = self.unicodeEmojiRegex.search(s)
-            matchObj = emoji.get_emoji_regexp().search(s)
-            print(matchObj)
-            if matchObj is not None:
-                tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(0), id=None)
+            # Check to make sure the first character ISNT a normal character since the emoji library's regex
+            # will find anything. This check allows us to make sure a unicode emoji is at the start of the line
+            if ((len(sStrip) > 0) and (sStrip[0].isascii())):
+                matchObj = emoji.get_emoji_regexp().search(sStrip)
+                print(matchObj)
+                if matchObj is not None:
+                    tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(0), id=None)
 
-                # Prevent duplicates from making it into the list
-                if tEmoji not in trackedEmojis:
-                    trackedEmojis.append(tEmoji)
-                continue
+                    # Prevent duplicates from making it into the list
+                    if tEmoji not in trackedEmojis:
+                        trackedEmojis.append(tEmoji)
+                    continue
 
         event.cogData = trackedEmojis
         print(trackedEmojis)
