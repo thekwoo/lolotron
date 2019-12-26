@@ -141,7 +141,10 @@ class rsvp(commands.Cog):
             print(matchObj)
             if matchObj is not None:
                 tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(2), id=int(matchObj.group(3)))
-                trackedEmojis.append(tEmoji)
+
+                # Prevent duplicates from making it into the list
+                if tEmoji not in trackedEmojis:
+                    trackedEmojis.append(tEmoji)
                 continue
 
             # Next try to lookup the  by unicode
@@ -150,7 +153,10 @@ class rsvp(commands.Cog):
             print(matchObj)
             if matchObj is not None:
                 tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(0), id=None)
-                trackedEmojis.append(tEmoji)
+
+                # Prevent duplicates from making it into the list
+                if tEmoji not in trackedEmojis:
+                    trackedEmojis.append(tEmoji)
                 continue
 
         event.cogData = trackedEmojis
