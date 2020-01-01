@@ -83,7 +83,7 @@ class ExtMessage():
 
         msgSplitByLine = newMsgSplitByLine
 
-        # There are a few special multiline blocks we may need to handle. 
+        # There are a few special multiline blocks we may need to handle.
         # The following are currently supported is discord:
         # Code  Blocks: ``` / ```
         # Quote Blocks: >>>
@@ -96,37 +96,54 @@ class ExtMessage():
         newMsgSplitByLine = []
         inBlock = False
         for m in msgSplitByLine:
-            # Check if this is the start or end of a code block
+            # For code blocks, there can be multiple states where the code block starts/ends are in the same line. We end
+            # the lines bit by bit
             if self.CODE_BLOCK in m:
-                blockPos = m.find(self.CODE_BLOCK)
+                remainingMsg = m
+                while (remainingMsg != ''):
+                    # Consume the start of the line before the block starts
+                    # Also start creating the aggregated block line with just the block start
+                    if ((not inBlock) and (self.CODE_BLOCK in remainingMsg)):
+                        blockPos = remainingMsg.find(self.CODE_BLOCK)
 
-                # Start of block found, separate the start of the line from the start of the block
-                if not inBlock:
-                    preBlockMsg = m[:blockPos]
-                    if (preBlockMsg != ''):
-                        newMsgSplitByLine.append(preBlockMsg)
+                        if (remainingMsg[:blockPos] != ''):
+                            newMsgSplitByLine.append(remainingMsg[:blockPos])
 
-                    newStr = m[blockPos:]
-                    inBlock = True
-                # End of block found, separate the end of the block and the end of the line
-                else:
-                    postBlockMsg = m[(blockPos + len(self.CODE_BLOCK)):0]
+                        newStr       = self.CODE_BLOCK
+                        remainingMsg = remainingMsg[blockPos + len(self.CODE_BLOCK):]
+                        inBlock = True
+                    # In the block, and the end block is in the same line
+                    elif ((inBlock) and (self.CODE_BLOCK in remainingMsg)):
+                        blockPos = remainingMsg.find(self.CODE_BLOCK) + len(self.CODE_BLOCK)
+                        newStr  += remainingMsg[:blockPos]
 
-                    newStr += m[:(blockPos+len(self.CODE_BLOCK))]
-                    newMsgSplitByLine.append(newStr)
+                        # The aggregated block can end up larger than the max character limit
+                        # This is a sanity check, but this doesn't actually fix anything
+                        if (len(newStr) > self.MAX_MSG_LEN):
+                            raise ValueError('Aggregated code block length ({}) exceeds MAX_MSG_LEN ({})'.format(
+                                len(newStr), self.MAX_MSG_LEN))
 
-                    if (postBlockMsg != ''):
-                        newMsgSplitByLine.append(preBlockMsg)
+                        # Add the block to it's own line
+                        newMsgSplitByLine.append(newStr)
 
-                    inBlock = False
+                        remainingMsg = remainingMsg[blockPos:]
+                        inBlock = False
+                    # In the block and no end of the block
+                    elif (inBlock):
+                        newStr += remainingMsg
+                        remainingMsg = ''
+                    # Not in block and no start of block
+                    else:
+                        if (remainingMsg[:blockPos] != ''):
+                            newMsgSplitByLine.append(remainingMsg)
 
-                    # The aggregated block can end up larger than the max character limit
-                    # This is a sanity check, but this doesn't actually fix anything
-                    if (len(newStr) > self.MAX_MSG_LEN):
-                        raise ValueError('Aggregated code block length ({}) exceeds MAX_MSG_LEN ({})'.format(
-                            len(newStr), self.MAX_MSG_LEN))
+                        remainingMsg = ''
+
+            # We are in a block and there are no end markers
             elif inBlock:
                 newStr += m
+
+            # We are not in a block
             else:
                 newMsgSplitByLine.append(m)
 
@@ -139,7 +156,7 @@ class ExtMessage():
         msgIdx = 0
         for lineIdx,line in enumerate(msgSplitByLine):
             while True:
-                remainingLines = len(msgSplitByLine) - lineIdx 
+                remainingLines = len(msgSplitByLine) - lineIdx
                 remainingMsgs  = self.msgCnt - msgIdx
 
                 # To ensure later messages always have content, make sure there is excess content
@@ -166,7 +183,7 @@ class ExtMessage():
             if ((splitMsg[msg] == '') or splitMsg[msg].isspace()):
                 splitMsg[msg] += self.BLANK_STR
 
-        return splitMsg 
+        return splitMsg
 
     async def create(self, channel):
         # Get all the messages we need
@@ -178,13 +195,13 @@ class ExtMessage():
 
         # The last object's ID is our ID
         self.id = self.msgObjs[-1].id
-    
+
     async def edit(self, content:str):
         # Make sure the new message is not too long
         msgLen = len(content)
         maxChars = self.msgCnt * self.MAX_MSG_LEN
         if (msgLen > maxChars):
-            raise ValueError('New message of length {} is larger than max that can represented {}') 
+            raise ValueError('New message of length {} is larger than max that can represented {}')
 
         # Store the message, then reparse to prepare for editing
         self.msg = content
@@ -240,8 +257,7 @@ class ExtMessage():
         for m in self.msgObjs:
             if m.id == id:
                 return True
-        
-        return False
-        
 
-        
+        return False
+
+
