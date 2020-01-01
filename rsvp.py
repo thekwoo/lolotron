@@ -45,12 +45,7 @@ class rsvp(commands.Cog):
     # TODO: This specifies that time is always in UTC, which is currently true.
     #       But hopefully it won't always be that way
     templateMessageFoot = \
-    '''
-    ```
-    SystemID: {}
-    Expiration Time: {} UTC
-    ```
-    '''
+    '''```SystemID: {}\nExpiration Time: {} UTC```'''
 
     expireTimeIncr = timedelta(days=3, hours=0)
     expireTimeExt  = timedelta(days=1, hours=0)
@@ -58,10 +53,6 @@ class rsvp(commands.Cog):
 
     # RegEx to search a message for a line starting with a discord emoji
     emojiRegex = re.compile(r'^(<:(\w*):(\d*)>)')
-
-    # Regex to search a message for a line starting with a unicode emoji
-    emojiList = map(lambda x: ''.join(x.split()), emoji.UNICODE_EMOJI.keys())
-    unicodeEmojiRegex = re.compile('|'.join(re.escape(p) for p in emojiList))
 
     def __init__(self, bot):
         self.bot = bot
@@ -152,7 +143,8 @@ class rsvp(commands.Cog):
             # Next try to lookup the  by unicode
             # Check to make sure the first character ISNT a normal character since the emoji library's regex
             # will find anything. This check allows us to make sure a unicode emoji is at the start of the line
-            if ((len(sStrip) > 0) and (sStrip[0].isascii())):
+            # We also need to check for ':' since a unicode emoji may be the name
+            if ((len(sStrip) > 0) and (sStrip[0] == ':' or not (sStrip[0].isascii()))):
                 matchObj = emoji.get_emoji_regexp().search(sStrip)
                 print(matchObj)
                 if matchObj is not None:
@@ -212,7 +204,7 @@ class rsvp(commands.Cog):
         if ctx.author == self.bot.user:
             return
 
-        # Attempt to get the message ID. Ideally it is the only thing on the first line, but 
+        # Attempt to get the message ID. Ideally it is the only thing on the first line, but
         # in the case that it's not, we will need to hack up the line to first the first argument
         # that is surrounded by spaces
         try:
@@ -221,7 +213,7 @@ class rsvp(commands.Cog):
             msgId = int(argSplitSpace[0].strip())
         except:
             print('RSVP Edit did not get a message ID, so we cant do anything. Arg was: {}'.format(arg))
-            await ctx.send('RSVP Edit could not parse out a message ID to edit. Please check your syntax.\n' + 
+            await ctx.send('RSVP Edit could not parse out a message ID to edit. Please check your syntax.\n' +
                            'It should be: edit <message ID> <new Message>')
             return
 
@@ -232,7 +224,7 @@ class rsvp(commands.Cog):
             msg = arg[(len(argSplitSpace[0])):].strip()
         except:
             print('RSVP Edit did not get a new message, so we cant do anything. Skipping...')
-            await ctx.send('RSVP Edit could not parse out a message for the edit. Please check your syntax.\n' + 
+            await ctx.send('RSVP Edit could not parse out a message for the edit. Please check your syntax.\n' +
                            'It should be: edit <message ID> <new Message>')
             return
 
@@ -290,7 +282,7 @@ class rsvp(commands.Cog):
             msgId = int(arg)
         except:
             print('RSVP Delete did not get a message ID, so we cant do anything. Argument was: {}'.format(arg))
-            await ctx.send('RSVP Delete could not parse out a message ID to delete. Please check your syntax.\n' + 
+            await ctx.send('RSVP Delete could not parse out a message ID to delete. Please check your syntax.\n' +
                            'It should be: delete <message ID>')
             return
         else:
@@ -336,7 +328,7 @@ class rsvp(commands.Cog):
             timeUnits = int(qty)
         except:
             print('RSVP Extend Failed to convert rsvp delete argument to delete. Got System ID: {}, Quantity: {}'.format(sysId, qty))
-            await ctx.send('RSVP Extend could not parse out a message ID or time quantity to extend. Please check your syntax.\n' + 
+            await ctx.send('RSVP Extend could not parse out a message ID or time quantity to extend. Please check your syntax.\n' +
                            'It should be: extend <message ID> <quantity>')
             return
         else:
