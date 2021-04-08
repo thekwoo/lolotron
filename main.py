@@ -14,13 +14,28 @@ from typing import Any,Dict,List,Tuple
 import tracker
 import rsvp
 
+# Discord is now requiring us to declare the events we want
+# This enables the following:
+#   guilds, guild_messages, guild_reactions
+# The opt in intents are disabled:
+#   members, presences
+# All other intents are explicity disabled below
+clientIntents = discord.Intents.default()
+clientIntents.bans = False
+clientIntents.emojis = False
+clientIntents.integrations = False
+clientIntents.webhooks = False
+clientIntents.invites = False
+clientIntents.voice_states = False
+clientIntents.dm_messages = False
+clientIntents.dm_reactions = False
+clientIntents.typing = False
+
 # We need to create the client early so that we can override a lot of the functions
 # internally. This version is the Bot version so we have access to command parsing
-client = dxc.Bot('%', description='')
+client = dxc.Bot(command_prefix='%', description='', max_messages=None, intents=clientIntents)
 
-'''
-Initial setup to know that things have worked
-'''
+# Initial setup to know that things have worked
 @client.event
 async def on_ready():
     print('*' * 80)
@@ -31,10 +46,6 @@ async def on_ready():
     print('I am connected to the following servers:')
     for g in client.guilds:
         print(g.name)
-
-        for chan in g.text_channels:
-            print('--> {:s}'.format(chan.name))
-
 
 ###############################################################################
 # Load General Settings
@@ -57,4 +68,4 @@ client.add_cog(tracker.reactTracker(client))
 client.add_cog(rsvp.rsvp(client))
 print('Starting to run')
 client.run(token)
-print('Should be done')
+print('Should be done, exiting')
