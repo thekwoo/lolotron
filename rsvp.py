@@ -8,7 +8,7 @@ import textwrap
 from typing import Any,Dict,List,Tuple
 
 # Internal Libraries
-import extmessage
+#import extmessage
 import tracker
 
 class rsvp(commands.Cog):
@@ -16,7 +16,6 @@ class rsvp(commands.Cog):
 
     RSVPs allow for orderly tracking of sign-ups.
     """
-
 
     # Maybe one day we can set this per server in settings...but that requires a bit
     # more work than I'm willing to do right now.
@@ -26,12 +25,6 @@ class rsvp(commands.Cog):
     #rsvpEmoji = discord.PartialEmoji(animated=False, name='nomcookie', id=563107909828083742)
     # For Development:
     rsvpEmoji = discord.PartialEmoji(animated=False, name='tempest', id=556941054277058560)
-
-    templateMessageHead = \
-    '''
-    Posted by: {}
-
-    '''
 
     templateMessageBody = \
     '''
@@ -45,7 +38,7 @@ class rsvp(commands.Cog):
     # TODO: This specifies that time is always in UTC, which is currently true.
     #       But hopefully it won't always be that way
     templateMessageFoot = \
-    '''```SystemID: {}\nExpiration Time: {} UTC```'''
+    '''SystemID: {}\nExpiration Time: {} UTC'''
 
     expireTimeIncr = timedelta(days=3, hours=0)
     expireTimeExt  = timedelta(days=1, hours=0)
@@ -69,9 +62,7 @@ class rsvp(commands.Cog):
     async def msgGenerator(self, event:tracker.Tracker):
         # Create the main message
         # This is broken up this way to prevent stupid tabs from making indents look weird
-        msg  = textwrap.dedent(self.templateMessageHead.format(event.owner.display_name))
-        msg += event.message
-        msg += textwrap.dedent(self.templateMessageBody.format(self.rsvpEmoji))
+        msg = textwrap.dedent(self.templateMessageBody.format(self.rsvpEmoji))
 
         # First collect the list of valid signups as well as valid reacts to the special reacts
         # To prevent strange shenanigans, the owner is always first regardless if they have
@@ -113,10 +104,12 @@ class rsvp(commands.Cog):
             msg += '\n'
             cnt += 1
 
-        # Append the footer information
-        msg += textwrap.dedent(self.templateMessageFoot.format(event.msgObj.id, event.expire.strftime(self.expireTimeFmt)))
+        # Retrieve embed object from the message object
+        # We overwrite the 2nd field which should be the signups
+        msgEmbed = event.msgObj.embeds[0]
+        msgEmbed = msgEmbed.set_field_at(1, name='Sign-ups', value=msg, inline=False)
 
-        await event.msgObj.edit(content = msg)
+        await event.msgObj.edit(embed=msgEmbed)
 
     '''
     Parses a message for emojis that are at the start of the line, indicating that they
@@ -131,7 +124,6 @@ class rsvp(commands.Cog):
 
             # Search if its a Discord style emoji first
             matchObj = self.emojiRegex.search(sStrip)
-            print(matchObj)
             if matchObj is not None:
                 tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(2), id=int(matchObj.group(3)))
 
@@ -146,7 +138,6 @@ class rsvp(commands.Cog):
             # We also need to check for ':' since a unicode emoji may be the name
             if ((len(sStrip) > 0) and (sStrip[0] == ':' or not (sStrip[0].isascii()))):
                 matchObj = emoji.get_emoji_regexp().search(sStrip)
-                print(matchObj)
                 if matchObj is not None:
                     tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(0), id=None)
 
@@ -156,7 +147,6 @@ class rsvp(commands.Cog):
                     continue
 
         event.cogData = trackedEmojis
-        print(trackedEmojis)
 
     @commands.group(pass_context=True)
     async def rsvp(self, ctx):
@@ -165,67 +155,60 @@ class rsvp(commands.Cog):
     @rsvp.command(brief = '''Create a new RSVP event''',
                   help  = '''Create a new RSVP event. All text after the "add" command will be used in the message
                            as is. You can use any basic discord or serer hosted emoji in your text''',
-                  usage = '''<msg>''')
-    async def add(self, ctx, *, msgBody):
+                  usage = '''<title> <msg>''')
+    async def add(self, ctx, title, *, msgBody):
         # Get the owner from the context
         owner = ctx.author
 
-        # We need to create a message and send it to get a messageID, since we use the messageID as the identifier
-        # We will edit the actual content later
-        # We reserve for at least 4 messages since the RSVP is at most 1, overhead for header and footer are hopefully
-        # just 1, and leave 2 for signups.
-        msg = extmessage.ExtMessage(msgCnt=4, msg='Preparing an RSVP message...')
-        await msg.create(ctx.channel)
+        # Create the embed for the message
+        # Metadata is located in the footer which we will add later since we don't have the info for it yet
+        msg = discord.Embed()
+        msg.title = title
+        msg.add_field(name='Details', value=msgBody, inline=False)
+        msg.add_field(name='Sign-ups', value='Preparing sign ups...', inline=False)
+
+        msgObj = await ctx.channel.send(embed=msg)
 
         # Finish setting up the RSVP Event Object
-        t = self.tracker.createTrackedItem(msg, owner, msg=msgBody, cogOwner=type(self).__name__)
+        event = self.tracker.createTrackedItem(msgObj=msgObj, user=owner, msg=msgBody, cogOwner=type(self).__name__)
+
+        # Add footer now that we have the message ID
+        msg = msgObj.embeds[0]
+        msg.set_footer(text=self.templateMessageFoot.format(event.msgObj.id, event.expire.strftime(self.expireTimeFmt)))
+        await msgObj.edit(embed=msg)
 
         # Search for special emojis
-        self.parseMsg(t)
+        self.parseMsg(event)
 
         # Update the RSVP Message from the bot
-        await self.msgGenerator(t)
+        await self.msgGenerator(event)
 
         # For convenience, add the reaction to the post so people don't have to dig it up
-        await t.msgObj.add_reaction(self.rsvpEmoji)
+        await event.msgObj.add_reaction(self.rsvpEmoji)
 
-        for e in t.cogData:
-            await t.msgObj.add_reaction(e)
+        for e in event.cogData:
+            await event.msgObj.add_reaction(e)
+
+        print('Created an RSVP with ID {}'.format(event.msgObj.id))
 
         # Delete the original message now that we're done parsing it
         await ctx.message.delete()
 
+    @add.error
+    async def add_error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            print('RSVP Add Failed to convert a passed argument')
+            await ctx.send('RSVP Add could not parse out a title and/or new description. ' +
+                           'Please check your syntax.\n' +
+                           'It should be: add "<title>" <new description>')
+
     @rsvp.command(brief = '''Edits an existing RSVP event message.''',
                   help  = '''Edits an existing RSVP event message. Only the owner of the message can edit
                            the message. The entire message is replaced and reparsed during this command.''',
-                  usage = '''<systemID> <msg>''')
-    async def edit(self, ctx, *, arg):
+                  usage = '''<systemID> "<title>" <msg>''')
+    async def edit(self, ctx, msgId:int, title:str, *, msgBody):
         # Ignore ourselves
         if ctx.author == self.bot.user:
-            return
-
-        # Attempt to get the message ID. Ideally it is the only thing on the first line, but
-        # in the case that it's not, we will need to hack up the line to first the first argument
-        # that is surrounded by spaces
-        try:
-            argSplitLine = arg.splitlines(keepends=True)
-            argSplitSpace = argSplitLine[0].split(' ')
-            msgId = int(argSplitSpace[0].strip())
-        except:
-            print('RSVP Edit did not get a message ID, so we cant do anything. Arg was: {}'.format(arg))
-            await ctx.send('RSVP Edit could not parse out a message ID to edit. Please check your syntax.\n' +
-                           'It should be: edit <message ID> <new Message>')
-            return
-
-        # Use the rest of the arg as the message
-        # Depending on if the message was on the same line as the message ID or not, we probably want to strip
-        # the ends to clear extra spaces and whatnot
-        try:
-            msg = arg[(len(argSplitSpace[0])):].strip()
-        except:
-            print('RSVP Edit did not get a new message, so we cant do anything. Skipping...')
-            await ctx.send('RSVP Edit could not parse out a message for the edit. Please check your syntax.\n' +
-                           'It should be: edit <message ID> <new Message>')
             return
 
         # Grab the event and make sure we can operate on it
@@ -246,8 +229,15 @@ class rsvp(commands.Cog):
                 event.owner.display_name))
             return
 
+        # Update the title and details field
+        msgObj = event.msgObj
+        msgEmbed = msgObj.embeds[0]
+        msgEmbed.title = title
+        msgEmbed = msgEmbed.set_field_at(0, name='Details', value=msgBody, inline=False)
+        await event.msgObj.edit(embed=msgEmbed)
+
         # Update Emojis
-        event.message = msg
+        event.message = msgBody
         self.parseMsg(event)
 
         # TODO: There is an edge case here where the edit will remove existing reacts. We currently don't remove
@@ -267,26 +257,26 @@ class rsvp(commands.Cog):
         # Delete the modifying message
         await ctx.message.delete()
 
+    @edit.error
+    async def edit_error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            print('RSVP Edit Failed to convert a passed argument')
+            await ctx.send('RSVP Edit could not parse out a message ID to delete, title, and/or new description. ' +
+                           'Please check your syntax.\n' +
+                           'It should be: edit <message ID> "<title>" <new description>')
+
     @rsvp.command(brief = '''Deletes an existing RSVP event message.''',
                   help  = '''Deletes an existing RSVP message. Only the owner of the message can delete it.
-                           Deletion is permanent and un-recoverable. On completion, the entire history of
-                           the message is purged.''',
+                             Deletion is permanent and un-recoverable. On completion, the entire history of
+                             the message is purged.''',
                   usage = '''<systemID>''')
-    async def delete(self, ctx, arg):
+    async def delete(self, ctx, msgId:int):
         # Ignore ourselves
         if ctx.author == self.bot.user:
             return
 
-        # Attempt to coerce the arguments from a string to an int and perform a lookup for the ID
-        try:
-            msgId = int(arg)
-        except:
-            print('RSVP Delete did not get a message ID, so we cant do anything. Argument was: {}'.format(arg))
-            await ctx.send('RSVP Delete could not parse out a message ID to delete. Please check your syntax.\n' +
-                           'It should be: delete <message ID>')
-            return
-        else:
-            event = self.tracker.getTrackedItem(msgId)
+        # Look up event
+        event = self.tracker.getTrackedItem(msgId)
 
         # Skip modifying anything if we aren't tracking this message
         if event is None:
@@ -311,28 +301,25 @@ class rsvp(commands.Cog):
         # Delete the modifying message to indicate that we've processed it
         await ctx.message.delete()
 
+    @delete.error
+    async def delete_error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            print('RSVP Delete Failed to convert a passed argument')
+            await ctx.send('RSVP Delete could not parse out a message ID to delete. Please check your syntax.\n' +
+                            'It should be: delete <message ID>')
+
     @rsvp.command(brief = '''Extends the duration of an existing RSVP event message.''',
                   help  = '''Extends the duration of an existing RSVP message. Only the owner of the message can
-                           extend it. You can only add additional time, not remove. Extension is a set amount of
-                           time (referred to as a time unit) and cannot be adjusted by the user. The quantity
-                           provided is the number of time units to extend by.''',
+                             extend it. You can only add additional time, not remove. Extension is a set amount of
+                             time (referred to as a time unit) and cannot be adjusted by the user. The quantity
+                             provided is the number of time units to extend by.''',
                   usage = '''<systemID> <quantity>''')
-    async def extend(self, ctx, sysId, qty):
+    async def extend(self, ctx, msgId:int, qty:int):
         # Ignore ourselves
         if ctx.author == self.bot.user:
             return
 
-        # Attempt to coerce the arguments from strings to ints
-        try:
-            msgId     = int(sysId)
-            timeUnits = int(qty)
-        except:
-            print('RSVP Extend Failed to convert rsvp delete argument to delete. Got System ID: {}, Quantity: {}'.format(sysId, qty))
-            await ctx.send('RSVP Extend could not parse out a message ID or time quantity to extend. Please check your syntax.\n' +
-                           'It should be: extend <message ID> <quantity>')
-            return
-        else:
-            event = self.tracker.getTrackedItem(msgId)
+        event = self.tracker.getTrackedItem(msgId)
 
         # Skip modifying anything if we aren't tracking this message
         if event is None:
@@ -341,11 +328,24 @@ class rsvp(commands.Cog):
             return
 
         # Extend the message
-        extTime = self.expireTimeExt * timeUnits
+        extTime = self.expireTimeExt * qty
         event.expire += extTime
 
+        # We need to edit the footer with the new expiration time
+        msgObj = event.msgObj
+        msg = msgObj.embeds[0]
+        msg.set_footer(text=self.templateMessageFoot.format(event.msgObj.id, event.expire.strftime(self.expireTimeFmt)))
+        await msgObj.edit(embed=msg)
+
         # Reprint the message
-        await self.msgGenerator(event)
+        #await self.msgGenerator(event)
 
         # Delete the modifying message to indicate that we've processed it
         await ctx.message.delete()
+
+    @extend.error
+    async def extend_error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            print('RSVP Extend Failed to convert a passed argument')
+            await ctx.send('RSVP Extend could not parse out a message ID and/or time quantity to extend. Please check your syntax.\n' +
+                            'It should be: extend <message ID> <quantity>')

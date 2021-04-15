@@ -278,15 +278,12 @@ class reactTracker(commands.Cog):
         message = await channel.fetch_message(payload.message_id)
         emoji   = payload.emoji
         guild   = await self.bot.fetch_guild(payload.guild_id)
-        print('Got guild: {}'.format(guild))
 
         # Try to look up the user in the guild to try to get the member
         # but if it fails we'll need to fallback to using a standard user lookup
         user = await guild.fetch_member(payload.user_id)
-        print('Fetched member: {}'.format(user))
         if user is None:
             user = self.bot.get_user(payload.user_id)
-        print('Fetched user: {}'.format(user))
 
         return _rawReactionPayload(user, guild, channel, message, emoji)
 
@@ -328,6 +325,7 @@ class reactTracker(commands.Cog):
             return
 
         # Purge reacts not on the main message if it is an extended message
+        # TODO: Remove when we depracate extended messages
         if (isinstance(event.msgObj, extmessage.ExtMessage) and (event.msgObj.id != msgId)):
             print('Tracker Reaction Add: Purged reacts that arent to the last message in a ExtMessage')
             await event.msgObj.clean_reactions()
