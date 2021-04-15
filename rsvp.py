@@ -107,7 +107,7 @@ class rsvp(commands.Cog):
         # Retrieve embed object from the message object
         # We overwrite the 2nd field which should be the signups
         msgEmbed = event.msgObj.embeds[0]
-        msgEmbed = msgEmbed.set_field_at(1, name='Sign-ups', value=msg, inline=False)
+        msgEmbed = msgEmbed.set_field_at(0, name='Sign-ups', value=msg, inline=False)
 
         await event.msgObj.edit(embed=msgEmbed)
 
@@ -164,7 +164,8 @@ class rsvp(commands.Cog):
         # Metadata is located in the footer which we will add later since we don't have the info for it yet
         msg = discord.Embed()
         msg.title = title
-        msg.add_field(name='Details', value=msgBody, inline=False)
+        msg.description = msgBody
+        #msg.add_field(name='Details', value=msgBody, inline=False)
         msg.add_field(name='Sign-ups', value='Preparing sign ups...', inline=False)
 
         msgObj = await ctx.channel.send(embed=msg)
@@ -215,7 +216,6 @@ class rsvp(commands.Cog):
 
         # Grab the event and make sure we can operate on it
         event = self.tracker.getTrackedItem(msgId)
-        print(event)
         if event is None:
             print('RSVP Edit is not tracking anything with ID {}. Skipping...'.format(msgId))
             await ctx.send('RSVP Edit could not find a message that is active with ID {}. Double check your message ID.'.format(msgId))
@@ -235,7 +235,7 @@ class rsvp(commands.Cog):
         msgObj = event.msgObj
         msgEmbed = msgObj.embeds[0]
         msgEmbed.title = title
-        msgEmbed = msgEmbed.set_field_at(0, name='Details', value=msgBody, inline=False)
+        msgEmbed.description = msgBody
         await event.msgObj.edit(embed=msgEmbed)
 
         # Update Emojis
@@ -266,6 +266,8 @@ class rsvp(commands.Cog):
             await ctx.send('RSVP Edit could not parse out a message ID to delete, title, and/or new description. ' +
                            'Please check your syntax.\n' +
                            'It should be: edit <message ID> "<title>" <new description>')
+        else:
+            print(error)
 
     @rsvp.command(brief = '''Deletes an existing RSVP event message.''',
                   help  = '''Deletes an existing RSVP message. Only the owner of the message can delete it.
@@ -309,6 +311,8 @@ class rsvp(commands.Cog):
             print('RSVP Delete Failed to convert a passed argument')
             await ctx.send('RSVP Delete could not parse out a message ID to delete. Please check your syntax.\n' +
                             'It should be: delete <message ID>')
+        else:
+            print(error)
 
     @rsvp.command(brief = '''Extends the duration of an existing RSVP event message.''',
                   help  = '''Extends the duration of an existing RSVP message. Only the owner of the message can
@@ -351,3 +355,5 @@ class rsvp(commands.Cog):
             print('RSVP Extend Failed to convert a passed argument')
             await ctx.send('RSVP Extend could not parse out a message ID and/or time quantity to extend. Please check your syntax.\n' +
                             'It should be: extend <message ID> <quantity>')
+        else:
+            print(error)
