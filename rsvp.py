@@ -201,6 +201,8 @@ class rsvp(commands.Cog):
             await ctx.send('RSVP Add could not parse out a title and/or new description. ' +
                            'Please check your syntax.\n' +
                            'It should be: add "<title>" <new description>')
+        else:
+            print(error)
 
     @rsvp.command(brief = '''Edits an existing RSVP event message.''',
                   help  = '''Edits an existing RSVP event message. Only the owner of the message can edit
