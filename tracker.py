@@ -342,7 +342,6 @@ class reactTracker(commands.Cog):
 
         # Run any callbacks that the Cog who created the tracker requested
         if (event.cogOwner is not None) and (event.cogOwner in self.msgCb):
-            print('Modifying event')
             await self.msgCb[event.cogOwner](event)
 
     '''
@@ -364,7 +363,7 @@ class reactTracker(commands.Cog):
 
         # Skip modifying anything if we aren't tracking on this message
         if msgId not in self.trackedItems:
-            print('could not find {:d} in the tracker so ignoring this'.format(msgId))
+            print('Tracker Reaction Remove: Could not find {:d} in the tracker so ignoring this'.format(msgId))
             return
         else:
             event = self.trackedItems[msgId]
@@ -377,7 +376,7 @@ class reactTracker(commands.Cog):
                 break
         else:
             # Something goofy happened...so we'll just pretend it never happened
-            print('reaction_remove sub-routine failed to find the user who un-reacted.')
+            print('Tracker Reaction Remove: sub-routine failed to find the user who un-reacted.')
             return
 
         # For auditing's sake, we don't delete entries, only invalidate them
