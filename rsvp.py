@@ -24,7 +24,7 @@ class rsvp(commands.Cog):
     # For HIDE:
     #rsvpEmoji = discord.PartialEmoji(animated=False, name='nomcookie', id=563107909828083742)
     # For Development:
-    rsvpEmoji = discord.PartialEmoji(animated=False, name='tempest', id=556941054277058560)
+    #rsvpEmoji = discord.PartialEmoji(animated=False, name='tempest', id=556941054277058560)
 
     templateMessageBody = \
     '''
@@ -46,7 +46,7 @@ class rsvp(commands.Cog):
     # RegEx to search a message for a line starting with a discord emoji
     emojiRegex = re.compile(r'^(<:(\w*):(\d*)>)')
 
-    def __init__(self, bot):
+    def __init__(self, bot, settings):
         self.bot = bot
 
         self.rsvps = {}
@@ -54,6 +54,16 @@ class rsvp(commands.Cog):
         # Register out callbacks with the reactionTracker
         self.tracker = self.bot.get_cog('reactTracker')
         self.tracker.registerCallbacks(type(self).__name__, self.msgGenerator, self.parseMsg)
+
+        # Create sign-up emoji from settings
+        # If we have a user setting for it, use it. Otherwise we use a ":raisedhands:" emoji as a default
+        if 'rsvpEmoji' in settings:
+            self.rsvpEmoji = discord.PartialEmoji(animated=False,
+                                                  name=settings['rsvpEmoji']['name'],
+                                                  id  =settings['rsvpEmoji']['id'])
+        else:
+            self.rsvpEmoji= discord.PartialEmoji(animated=False,
+                                                name='\U0001F64C')
 
     '''
     Helper function that generates the RSVP message

@@ -56,7 +56,7 @@ with open('lolotron_config.json', 'r') as f:
     rawSettings = f.read()
     genSettings = json.loads(rawSettings)
 
-token = genSettings['token']
+token = genSettings['general']['token']
 
 ###############################################################################
 # Time to start everything. We never return from here, so make sure everything
@@ -64,8 +64,8 @@ token = genSettings['token']
 ###############################################################################
 
 print('Loading modules')
-client.add_cog(tracker.reactTracker(client))
-client.add_cog(rsvp.rsvp(client))
+client.add_cog(tracker.reactTracker(bot=client, settings=genSettings['tracker']))
+client.add_cog(rsvp.rsvp(bot=client, settings=genSettings['rsvp']))
 print('Starting to run')
 client.run(token)
 print('Should be done, exiting')

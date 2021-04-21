@@ -147,7 +147,7 @@ A Cog that tracks reactions to a message
 class reactTracker(commands.Cog):
     jsonFileName = 'reactTracker.json'
 
-    def __init__(self, bot):
+    def __init__(self, bot, settings):
         self.bot = bot
 
         self.trackedItems = {}
