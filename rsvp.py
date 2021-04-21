@@ -32,7 +32,6 @@ class rsvp(commands.Cog):
     Please react to this message with {} to join.
     Removing your reaction will lose your spot in the queue.
 
-    Signup:
     '''
 
     # TODO: This specifies that time is always in UTC, which is currently true.
@@ -105,9 +104,32 @@ class rsvp(commands.Cog):
             cnt += 1
 
         # Retrieve embed object from the message object
-        # We overwrite the 2nd field which should be the signups
         msgEmbed = event.msgObj.embeds[0]
-        msgEmbed = msgEmbed.set_field_at(0, name='Sign-ups', value=msg, inline=False)
+
+        # We will delete all fields that are signups and recreate them now
+        msgEmbed.clear_fields()
+
+        # Now go through the message we want and break it up by the max field length
+        # NOTE: This does not respect maximum embed length and can still fail there
+        cMsg = ''
+        fieldCnt = 0
+        for l in msg.splitlines(keepends=True):
+            if len(cMsg) > 1024:
+                if (fieldCnt == 0):
+                    msgEmbed.add_field(name='Sign-ups', value=cMsg, inline=False)
+                else:
+                    msgEmbed.add_field(name='\u200B', value=cMsg, inline=False)
+
+                cMsg = ''
+                fieldCnt += 1
+
+            cMsg += l
+
+        if len(cMsg) > 0:
+            if (fieldCnt == 0):
+                msgEmbed.add_field(name='Sign-ups', value=cMsg, inline=False)
+            else:
+                msgEmbed.add_field(name='\u200B', value=cMsg, inline=False)
 
         await event.msgObj.edit(embed=msgEmbed)
 
