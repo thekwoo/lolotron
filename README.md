@@ -22,9 +22,18 @@ cd lolotron
 ```
 
 ## Configuration
-All settings are contained in ```lolotron_config.json``` for easy modification.
+All settings are contained in ```lolotron_config.json``` for easy modification. There is a section for each component of the bot. Each section is defined as a dictionary.
 
-To start, the bot will require a Discord bot token to operate properly. Modify the ```token``` setting to put your token in.
+### general
+The general section defines global bot settings. The only value is ```token``` which should be the Discord Bot token.
+
+### tracker
+There are no settings for the tracker at this time. Leave this section blank.
+
+### rsvp
+This section configures the RSVP component of the bot. The following fields are available:
+
+```rsvpEmoji```: This is a dictionary defining the sign-up emoji to use. If this is not present, a default emoji will be used. It should contain entries for ```name``` and ```id``` used to recreate the sign-up emoji.
 
 ## Running
 You simply need to just do:
