@@ -124,7 +124,7 @@ class rsvp(commands.Cog):
         cMsg = ''
         fieldCnt = 0
         for l in msg.splitlines(keepends=True):
-            if len(cMsg) > 1024:
+            if len(cMsg + l) > 1024:
                 if (fieldCnt == 0):
                     msgEmbed.add_field(name='Sign-ups', value=cMsg, inline=False)
                 else:
