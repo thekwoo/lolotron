@@ -164,14 +164,15 @@ class rsvp(commands.Cog):
                     trackedEmojis.append(tEmoji)
                 continue
 
-            # Next try to lookup the  by unicode
+            # Next try to lookup the emoji by unicode
             # Check to make sure the first character ISNT a normal character since the emoji library's regex
             # will find anything. This check allows us to make sure a unicode emoji is at the start of the line
             # We also need to check for ':' since a unicode emoji may be the name
             if ((len(sStrip) > 0) and (sStrip[0] == ':' or not (sStrip[0].isascii()))):
-                matchObj = emoji.get_emoji_regexp().search(sStrip)
+                matchObj = emoji.emoji_list(sStrip)
                 if matchObj is not None:
-                    tEmoji = disnake.PartialEmoji(animated=False, name=matchObj.group(0), id=None)
+                    # This only will grab the first emoji in a line. This is by design
+                    tEmoji = disnake.PartialEmoji(animated=False, name=matchObj[0]['emoji'], id=None)
 
                     # Prevent duplicates from making it into the list
                     if tEmoji not in trackedEmojis:
