@@ -2,8 +2,8 @@ import asyncio
 from collections import namedtuple
 from dataclasses import dataclass
 from datetime import datetime,timedelta
-import discord
-from discord.ext import commands
+import disnake
+from disnake.ext import commands
 from enum import Enum, auto
 import extmessage
 import json
@@ -21,8 +21,8 @@ and removal via the valid field.
 '''
 @dataclass
 class trackerEntry:
-    user:       discord.Member
-    react:      discord.Emoji or str
+    user:       disnake.Member
+    react:      disnake.Emoji or str
     timeStamp:  datetime
     valid:      bool
 
@@ -80,9 +80,9 @@ cogOwner  - The name of the registered Cog to lookup the function for callback
 '''
 @dataclass
 class Tracker:
-    owner:      discord.Member
+    owner:      disnake.Member
     message:    str
-    msgObj:     discord.Message
+    msgObj:     disnake.Message
     entries:    List[trackerEntry]
     expire:     datetime
     cogData:    Any
@@ -175,7 +175,7 @@ class reactTracker(commands.Cog):
     '''
     Creates a tracked object
     '''
-    def createTrackedItem(self, msgObj:discord.Message, user:discord.user,
+    def createTrackedItem(self, msgObj:disnake.Message, user:disnake.user,
                           msg:str='', cogOwner=None, usrdata=None, expire:datetime=None):
 
         if expire is None:
@@ -272,7 +272,7 @@ class reactTracker(commands.Cog):
     '''
     Converts a rawReactionActionEvent payload to objects
     '''
-    async def _unpackRawReaction(self, payload:discord.RawReactionActionEvent) -> _rawReactionPayload:
+    async def _unpackRawReaction(self, payload:disnake.RawReactionActionEvent) -> _rawReactionPayload:
 
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)

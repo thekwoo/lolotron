@@ -1,7 +1,7 @@
 # External Libraries
 from datetime import datetime, timedelta
-import discord
-from discord.ext import commands
+import disnake
+from disnake.ext import commands
 import emoji
 import re
 import textwrap
@@ -58,11 +58,11 @@ class rsvp(commands.Cog):
         # Create sign-up emoji from settings
         # If we have a user setting for it, use it. Otherwise we use a ":raisedhands:" emoji as a default
         if 'rsvpEmoji' in settings:
-            self.rsvpEmoji = discord.PartialEmoji(animated=False,
+            self.rsvpEmoji = disnake.PartialEmoji(animated=False,
                                                   name=settings['rsvpEmoji']['name'],
                                                   id  =settings['rsvpEmoji']['id'])
         else:
-            self.rsvpEmoji= discord.PartialEmoji(animated=False,
+            self.rsvpEmoji= disnake.PartialEmoji(animated=False,
                                                 name='\U0001F64C')
 
     '''
@@ -157,7 +157,7 @@ class rsvp(commands.Cog):
             # Search if its a Discord style emoji first
             matchObj = self.emojiRegex.search(sStrip)
             if matchObj is not None:
-                tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(2), id=int(matchObj.group(3)))
+                tEmoji = disnake.PartialEmoji(animated=False, name=matchObj.group(2), id=int(matchObj.group(3)))
 
                 # Prevent duplicates from making it into the list
                 if tEmoji not in trackedEmojis:
@@ -171,7 +171,7 @@ class rsvp(commands.Cog):
             if ((len(sStrip) > 0) and (sStrip[0] == ':' or not (sStrip[0].isascii()))):
                 matchObj = emoji.get_emoji_regexp().search(sStrip)
                 if matchObj is not None:
-                    tEmoji = discord.PartialEmoji(animated=False, name=matchObj.group(0), id=None)
+                    tEmoji = disnake.PartialEmoji(animated=False, name=matchObj.group(0), id=None)
 
                     # Prevent duplicates from making it into the list
                     if tEmoji not in trackedEmojis:
@@ -194,7 +194,7 @@ class rsvp(commands.Cog):
 
         # Create the embed for the message
         # Metadata is located in the footer which we will add later since we don't have the info for it yet
-        msg = discord.Embed()
+        msg = disnake.Embed()
         msg.title = title
         msg.description = msgBody
         #msg.add_field(name='Details', value=msgBody, inline=False)

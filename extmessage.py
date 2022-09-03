@@ -1,5 +1,5 @@
 import asyncio
-import discord
+import disnake
 import math
 from typing import Any,List,Dict,Tuple
 

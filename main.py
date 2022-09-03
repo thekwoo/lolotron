@@ -3,8 +3,8 @@ import asyncio
 from collections import namedtuple
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import discord
-import discord.ext.commands as dxc
+import disnake
+import disnake.ext.commands as dxc
 import json
 import sys
 import time
@@ -20,16 +20,19 @@ import rsvp
 # The opt in intents are disabled:
 #   members, presences
 # All other intents are explicity disabled below
-clientIntents = discord.Intents.default()
+clientIntents = disnake.Intents.default()
 clientIntents.bans = False
-clientIntents.emojis = False
-clientIntents.integrations = False
-clientIntents.webhooks = False
-clientIntents.invites = False
-clientIntents.voice_states = False
 clientIntents.dm_messages = False
 clientIntents.dm_reactions = False
+clientIntents.dm_typing = False
+clientIntents.emojis = False
+clientIntents.emojis_and_stickers = False
+clientIntents.integrations = False
+clientIntents.invites = False
+clientIntents.message_content = True
 clientIntents.typing = False
+clientIntents.voice_states = False
+clientIntents.webhooks = False
 
 # We need to create the client early so that we can override a lot of the functions
 # internally. This version is the Bot version so we have access to command parsing
